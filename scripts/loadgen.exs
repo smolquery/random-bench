@@ -1,6 +1,7 @@
 #!/usr/bin/env elixir
 Code.require_file("bench.exs", __DIR__)
 Code.require_file("report_html.exs", __DIR__)
+Code.require_file("clickbench_report.exs", __DIR__)
 
 defmodule Bench.Loadgen do
   @moduledoc """
@@ -401,7 +402,9 @@ defmodule Bench.Loadgen do
   defp push_code(id) do
     tarball = Path.join(System.tmp_dir!(), "bench-code.tgz")
 
-    Bench.sh!("tar", ["czf", tarball, "k6", "tools", "go.mod", "go.sum", "schemas"],
+    Bench.sh!(
+      "tar",
+      ["czf", tarball, "k6", "tools", "go.mod", "go.sum", "schemas", "scripts/clickbench"],
       cd: Bench.root(),
       env: [{"COPYFILE_DISABLE", "1"}]
     )
@@ -529,7 +532,10 @@ defmodule Bench.Loadgen do
   def sweep do
     benches = Bench.benches()
     ingest? = "ingest" in benches
-    box? = ingest? or "onebrc" in benches or "tail" in benches or "tsbs" in benches
+
+    box? =
+      ingest? or "onebrc" in benches or "tail" in benches or "tsbs" in benches or
+        "clickbench" in benches
 
     pod_ips = api_pod_ips()
     dataset = Bench.Remote.dataset()
@@ -565,6 +571,7 @@ defmodule Bench.Loadgen do
         "compaction" -> run_compaction()
         "onebrc" -> run_onebrc(id, dataset, table, key, watcher)
         "tsbs" -> run_tsbs(id, key, watcher)
+        "clickbench" -> run_clickbench(id, dataset, key, watcher)
       end
     end)
 
@@ -1464,10 +1471,10 @@ defmodule Bench.Loadgen do
       |> String.trim()
 
     IO.puts("== onebrc: upload1brc pid #{pid}, polling every #{onebrc_poll_s()}s")
-    onebrc_poll(id, pid, progress, summary, log)
+    upload_poll(id, pid, progress, summary, log)
   end
 
-  defp onebrc_poll(id, pid, progress, summary, log) do
+  defp upload_poll(id, pid, progress, summary, log) do
     Process.sleep(onebrc_poll_s() * 1000)
 
     out =
@@ -1492,7 +1499,7 @@ defmodule Bench.Loadgen do
 
     case state do
       "running" ->
-        onebrc_poll(id, pid, progress, summary, log)
+        upload_poll(id, pid, progress, summary, log)
 
       _done ->
         result = run!(id, "cat #{remote_dir()}/#{summary} 2>/dev/null || true")
@@ -1576,6 +1583,354 @@ defmodule Bench.Loadgen do
 
   defp max_or_nil([]), do: nil
   defp max_or_nil(values), do: Enum.max(values)
+
+  # ── bench: clickbench ──────────────────────────────────────────────────────
+
+  @clickbench_parquet_url "https://datasets.clickhouse.com/hits_compatible/athena_partitioned"
+
+  defp clickbench_table, do: Bench.env("CLICKBENCH_TABLE", "hits_v2")
+  defp clickbench_files, do: Bench.env_int("CLICKBENCH_FILES", 100)
+  defp clickbench_upload?, do: Bench.env("CLICKBENCH_UPLOAD", "true") == "true"
+  defp clickbench_queries?, do: Bench.env("CLICKBENCH_QUERIES", "true") == "true"
+  defp clickbench_only, do: Bench.env("CLICKBENCH_ONLY", "")
+  defp clickbench_pipelines, do: Bench.env_int("CLICKBENCH_PIPELINES", 8)
+  defp clickbench_workers, do: Bench.env_int("CLICKBENCH_WORKERS", 6)
+  defp clickbench_rows_per_request, do: Bench.env_int("CLICKBENCH_ROWS_PER_REQUEST", 4_000)
+  defp clickbench_duckdb_threads, do: Bench.env_int("CLICKBENCH_DUCKDB_THREADS", 3)
+  defp clickbench_duckdb_memory, do: Bench.env("CLICKBENCH_DUCKDB_MEMORY", "3GB")
+  defp clickbench_tries, do: Bench.env_int("CLICKBENCH_TRIES", 3)
+  defp clickbench_cold?, do: Bench.env("CLICKBENCH_COLD", "false") == "true"
+  defp clickbench_query_pod, do: Bench.env("CLICKBENCH_QUERY_POD", "smolquery-query-0")
+  defp clickbench_query_options, do: Bench.env("CLICKBENCH_QUERY_OPTIONS", ~s({"fileCache":true}))
+  defp clickbench_probe_tries, do: Bench.env_int("CLICKBENCH_PROBE_TRIES", 10)
+
+  defp clickbench_modes do
+    modes = Bench.env("CLICKBENCH_MODES", "single,scatter") |> String.split(",", trim: true)
+    modes = Enum.map(modes, &String.trim/1)
+    unknown = modes -- ~w(single scatter)
+
+    (modes != [] and unknown == []) ||
+      Bench.fatal!("CLICKBENCH_MODES takes single and/or scatter, got #{inspect(modes)}")
+
+    Enum.uniq(modes)
+  end
+
+  defp clickbench_mode_options(mode) do
+    clickbench_query_options()
+    |> JSON.decode!()
+    |> Map.put("distributed", mode == "scatter")
+    |> JSON.encode!()
+  end
+
+  defp clickbench_query_timeout_ms, do: Bench.env_int("CLICKBENCH_QUERY_TIMEOUT_MS", 600_000)
+  defp clickbench_drain_wait_s, do: Bench.env_int("CLICKBENCH_DRAIN_WAIT_S", 3600)
+  defp clickbench_duckdb_version, do: Bench.env("CLICKBENCH_DUCKDB_VERSION", "v1.5.4")
+
+  defp run_clickbench(id, dataset, key, watcher) do
+    table = clickbench_table()
+    ref = "#{dataset}.#{table}"
+    url = "#{Bench.Remote.base_url()}/v1/queries"
+    label = "loadgen-clickbench-#{table}#{label_suffix()}"
+    expected_rows = clickbench_files() * 1_000_000
+
+    IO.puts("\n== clickbench: table #{ref}, #{clickbench_files()} parquet file(s)")
+    Bench.Remote.setup(table)
+
+    IO.puts("== clickbench: pushing the working tree, building upload1brc and cbquery")
+    push_code(id)
+    put_api_key(key)
+    Bench.WatchMetrics.set_phase(watcher, "clickbench-prepare")
+    IO.puts("== clickbench: #{clickbench_prepare(id)}")
+
+    load =
+      if clickbench_upload?() do
+        Bench.WatchMetrics.set_phase(watcher, "clickbench-load")
+        load = clickbench_load(id, dataset, table, label)
+
+        IO.puts(
+          "== clickbench: #{load["rows_accepted"]} rows in " <>
+            "#{Float.round(load["duration_s"] / 1, 1)}s = #{round(load["rows_per_s"])} rows/s, " <>
+            "#{Float.round(load["mib_per_s"] / 1, 1)} MiB/s, #{load["requests"]} requests, " <>
+            "#{load["retries_429"]} x 429, #{load["retries_other"]} other retries, " <>
+            "#{load["rows_rejected"]} rejected, #{load["rows_failed"]} failed, exit #{load["exit"]}"
+        )
+
+        load
+      else
+        IO.puts("== clickbench: CLICKBENCH_UPLOAD=false, querying the rows already there")
+        nil
+      end
+
+    Bench.WatchMetrics.set_phase(watcher, "clickbench-drain")
+    drain_sql = "SELECT count(*) AS n FROM #{ref} WHERE CounterID = -1"
+    drain = await_hot_drain_with(url, key, drain_sql, clickbench_drain_wait_s())
+    IO.puts("== clickbench: hot tier #{drain_outcome(drain)}")
+
+    count = clickbench_count(url, key, ref)
+    IO.puts("== clickbench: count(*) #{count} (expected #{expected_rows})")
+
+    {passes, probe} =
+      if clickbench_queries?() do
+        passes =
+          Map.new(clickbench_modes(), fn mode ->
+            if clickbench_cold?() do
+              Bench.WatchMetrics.set_phase(watcher, "clickbench-cold-#{mode}")
+              clickbench_restart_query_pods()
+            end
+
+            Bench.WatchMetrics.set_phase(watcher, "clickbench-query-#{mode}")
+
+            result =
+              clickbench_box_queries(id, ref, "#{label}-#{mode}",
+                options: clickbench_mode_options(mode),
+                tries: clickbench_tries(),
+                only: clickbench_only()
+              )
+
+            {mode, result}
+          end)
+
+        Bench.WatchMetrics.set_phase(watcher, "clickbench-probe")
+        {passes, clickbench_probe(id, ref, label)}
+      else
+        {%{}, nil}
+      end
+
+    payload = %{
+      "inserted_at" => now_iso(),
+      "table" => ref,
+      "files" => clickbench_files(),
+      "rows_expected" => expected_rows,
+      "count" => count,
+      "load" => load,
+      "drain_wait_s" => drain.waited_s,
+      "drain_hot_files_left" => drain.hot_files,
+      "cold" => clickbench_cold?(),
+      "modes" => clickbench_modes(),
+      "passes" => passes,
+      "probe" => probe
+    }
+
+    path = Path.join(results_dir(), "#{label}.clickbench.json")
+    File.write!(path, JSON.encode!(payload) <> "\n")
+    IO.puts("== clickbench → #{label}.clickbench.json")
+
+    try do
+      IO.puts("== clickbench: report → #{Bench.ClickbenchReport.generate(path)}")
+    rescue
+      error -> IO.puts("== clickbench: no report (#{Exception.message(error)})")
+    end
+
+    delete_api_key()
+  end
+
+  defp clickbench_prepare(id) do
+    files = clickbench_files()
+
+    run!(id, """
+    set -euo pipefail
+    cd #{remote_dir()}
+    export PATH=/usr/local/go/bin:$PATH GOTOOLCHAIN=local GOPATH=/opt/go GOCACHE=/opt/go/cache
+    go build -o upload1brc ./tools/upload1brc
+    go build -o cbquery ./tools/cbquery
+    mkdir -p bin data/hits logs results
+    if [ ! -x bin/duckdb ]; then
+      case "$(uname -m)" in aarch64) arch=arm64 ;; *) arch=amd64 ;; esac
+      curl -fsSL -o /tmp/duckdb.zip \\
+        https://github.com/duckdb/duckdb/releases/download/#{clickbench_duckdb_version()}/duckdb_cli-linux-$arch.zip
+      python3 -c "import zipfile; zipfile.ZipFile('/tmp/duckdb.zip').extractall('bin')"
+      chmod +x bin/duckdb
+    fi
+    seq 0 #{files - 1} | xargs -P 16 -I{} sh -c \\
+      '[ -f data/hits/hits_{}.parquet ] || { curl -fsSL -o data/hits/hits_{}.parquet.part #{@clickbench_parquet_url}/hits_{}.parquet && mv data/hits/hits_{}.parquet.part data/hits/hits_{}.parquet; }'
+    echo "$(ls data/hits/*.parquet | wc -l) parquet files, $(du -sh data/hits | cut -f1), $(nproc) vCPU on the box"
+    """)
+    |> String.trim()
+  end
+
+  defp clickbench_load(id, dataset, table, label) do
+    urls =
+      Enum.map_join(api_pod_ips(), ",", fn ip ->
+        "http://#{ip}:4000/v1/datasets/#{dataset}/tables/#{table}/insert"
+      end)
+
+    stamp = DateTime.utc_now() |> Calendar.strftime("%Y%m%dT%H%M%SZ")
+    dir = "logs/#{label}-#{stamp}"
+    files = clickbench_files()
+
+    IO.puts(
+      "== clickbench: #{clickbench_pipelines()} pipelines x #{clickbench_workers()} workers " <>
+        "across #{urls |> String.split(",") |> length()} api pod(s), " <>
+        "~#{clickbench_rows_per_request()} rows/request, DuckDB #{clickbench_duckdb_threads()} threads each"
+    )
+
+    run!(id, """
+    set -euo pipefail
+    cd #{remote_dir()}
+    #{fetch_auth()}
+    export AUTH CB_LABEL=#{label}-#{stamp} CB_URLS='#{urls}' CB_ROWS=#{clickbench_rows_per_request()} \\
+      CB_WORKERS=#{clickbench_workers()} CB_THREADS=#{clickbench_duckdb_threads()} \\
+      CB_MEMORY=#{clickbench_duckdb_memory()} CB_PREFIX=#{label}-#{stamp}
+    mkdir -p #{dir}
+    setsid nohup bash -c 'date +%s.%N > #{dir}/started
+      seq 0 #{files - 1} | xargs -P #{clickbench_pipelines()} -n 1 bash scripts/clickbench/load-file.sh
+      echo $? > #{dir}/exit
+      date +%s.%N > #{dir}/finished' > #{dir}/driver.log 2>&1 < /dev/null &
+    """)
+
+    IO.puts("== clickbench: load running in #{dir}, polling every #{onebrc_poll_s()}s")
+    clickbench_load_poll(id, dir, files)
+  end
+
+  defp clickbench_load_poll(id, dir, files) do
+    Process.sleep(onebrc_poll_s() * 1000)
+
+    status =
+      run!(id, "cd #{remote_dir()} && python3 scripts/clickbench/load-status.py #{dir} #{files}")
+      |> String.trim()
+      |> JSON.decode!()
+
+    IO.puts(
+      "   #{status["files_done"]}/#{files} files, #{status["rows_accepted"]} rows, " <>
+        "#{round(status["rows_per_s"] || 0)} rows/s, #{Float.round((status["mib_per_s"] || 0) / 1, 1)} MiB/s, " <>
+        "#{status["requests"]} reqs, #{status["retries_429"]} x 429, " <>
+        "#{status["retries_other"]} other retries, #{status["rows_failed"]} failed"
+    )
+
+    if status["finished"] do
+      if status["exit"] != "0" do
+        tail =
+          run!(id, "cd #{remote_dir()} && tail -5 #{dir}/driver.log #{dir}/f*.log | tail -40")
+
+        IO.puts("== clickbench: a pipeline failed (xargs exit #{status["exit"]}):\n#{tail}")
+      end
+
+      status
+    else
+      clickbench_load_poll(id, dir, files)
+    end
+  end
+
+  defp clickbench_count(url, key, ref) do
+    case time_query(url, key, "SELECT count(*) AS n FROM #{ref}", %{
+           "timeoutMs" => clickbench_query_timeout_ms()
+         }) do
+      %{error: nil, rows: n} -> n
+      %{error: error} -> error
+    end
+  end
+
+  defp clickbench_restart_query_pods do
+    IO.puts("== clickbench: CLICKBENCH_COLD=true, deleting the query pods to empty /cache")
+    Bench.Kube.cmd(["delete", "pod", "-l", "app=smolquery-query", "--wait=true"])
+
+    case Bench.Kube.cmd(["rollout", "status", "statefulset/smolquery-query", "--timeout=600s"]) do
+      {_, 0} -> IO.puts("== clickbench: query pods ready")
+      {out, _} -> Bench.fatal!("query pods did not come back:\n#{out}")
+    end
+
+    Process.sleep(30_000)
+  end
+
+  defp clickbench_probe(id, ref, label) do
+    tries = clickbench_probe_tries()
+
+    if tries > 1 do
+      runs =
+        Map.new(~w(single scatter), fn mode ->
+          result =
+            clickbench_box_queries(id, ref, "#{label}-probe-#{mode}",
+              options: clickbench_mode_options(mode),
+              tries: tries,
+              queries: "scripts/clickbench/probe.sql"
+            )
+
+          {mode, result}
+        end)
+
+      single = clickbench_probe_median(runs["single"])
+      scatter = clickbench_probe_median(runs["scatter"])
+      overhead = if single && scatter, do: Float.round(scatter - single, 1)
+
+      IO.puts(
+        "== clickbench: probe median hot single #{single} ms, scatter #{scatter} ms, " <>
+          "scatter overhead #{overhead} ms"
+      )
+
+      %{"single_ms" => single, "scatter_ms" => scatter, "overhead_ms" => overhead, "runs" => runs}
+    end
+  end
+
+  defp clickbench_probe_median(%{"queries" => [%{"tries" => [_first | rest]} | _]}) do
+    rest |> Enum.reject(& &1["error"]) |> Enum.map(& &1["wall_ms"]) |> median_or_nil()
+  end
+
+  defp clickbench_probe_median(_result), do: nil
+
+  defp clickbench_box_queries(id, ref, name, opts) do
+    options = Keyword.fetch!(opts, :options)
+    tries = Keyword.fetch!(opts, :tries)
+    queries = Keyword.get(opts, :queries, "scripts/clickbench/queries.sql")
+    only = Keyword.get(opts, :only, "")
+    url = "http://#{pod_ip(clickbench_query_pod())}:4000/v1/queries"
+    out = "results/#{name}.queries.json"
+    log = "logs/#{name}.queries.log"
+    only_flag = if only == "", do: "", else: " -only #{only}"
+
+    IO.puts(
+      "== clickbench: #{name}: #{tries} tries per query of #{queries} from the box against " <>
+        "#{clickbench_query_pod()} (#{url}), options #{options}"
+    )
+
+    pid =
+      run!(id, """
+      set -euo pipefail
+      cd #{remote_dir()}
+      #{fetch_auth()}
+      export AUTH
+      rm -f #{out}
+      setsid nohup ./cbquery -url #{url} -ref #{ref} -queries #{queries} -tries #{tries} \\
+        -timeout-ms #{clickbench_query_timeout_ms()} -options '#{options}'#{only_flag} \\
+        -out #{out} > #{log} 2>&1 < /dev/null &
+      echo $!
+      """)
+      |> String.trim()
+
+    clickbench_query_poll(id, pid, out, log, 0)
+  end
+
+  defp clickbench_query_poll(id, pid, out, log, printed) do
+    Process.sleep(15_000)
+
+    state =
+      run!(id, """
+      cd #{remote_dir()}
+      if kill -0 #{pid} 2>/dev/null; then echo running; else echo done; fi
+      """)
+      |> String.trim()
+
+    lines =
+      run!(id, "cd #{remote_dir()} && tail -n +#{printed + 1} #{log} 2>/dev/null || true")
+      |> String.split("\n", trim: true)
+
+    Enum.each(lines, &IO.puts("   #{&1}"))
+    printed = printed + length(lines)
+
+    case state do
+      "running" ->
+        clickbench_query_poll(id, pid, out, log, printed)
+
+      _done ->
+        case run!(id, "gzip -c #{remote_dir()}/#{out} 2>/dev/null | base64 -w0 || true")
+             |> String.trim() do
+          "" ->
+            Bench.fatal!("cbquery exited without a result; see #{log} on the box")
+
+          encoded ->
+            encoded |> Base.decode64!() |> :zlib.gunzip() |> JSON.decode!()
+        end
+    end
+  end
 
   # ── bench: compaction ──────────────────────────────────────────────────────
 

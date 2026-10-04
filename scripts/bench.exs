@@ -39,6 +39,8 @@ defmodule Bench do
   `otel_logs_v3` clusters by `project_id` alone, `otel_logs_v4` by
   `[project_id, timestamp]`, and `otel_logs_v5` through `otel_logs_v20` by
   `[project_id, inserted_at]`. Every older table uses `[project_id, timestamp]`.
+  A `hits*` table (ClickBench) clusters by ClickHouse's ClickBench sort key
+  without `WatchID`: `[CounterID, EventDate, UserID, EventTime]`.
   `CLUSTERING` overrides both, as a comma-separated column list; an empty value
   clears clustering.
   """
@@ -86,9 +88,10 @@ defmodule Bench do
   defp default_clustering("otel_logs_v33"), do: ["project_id", "inserted_at"]
   defp default_clustering("kv_v1"), do: ["key", "inserted_at"]
   defp default_clustering("onebrc" <> _), do: ["station"]
+  defp default_clustering("hits" <> _), do: ["CounterID", "EventDate", "UserID", "EventTime"]
   defp default_clustering(_table), do: ["project_id", "timestamp"]
 
-  @bench_types ~w(ingest attrs tail pruning compaction onebrc tsbs)
+  @bench_types ~w(ingest attrs tail pruning compaction onebrc tsbs clickbench)
 
   @doc """
   The bench types to run, from `BENCHES`, as a comma-separated list.
@@ -129,8 +132,9 @@ defmodule Bench do
   @doc """
   The schema or DDL file for a table, per arm. An `onebrc*` table without its
   own file uses the `onebrc_v1` definition, so a worker sweep can give every
-  point a fresh table. Any other table without its own file falls back to the
-  original `otel_logs` definition, which v1 and v2 share.
+  point a fresh table. A `hits*` table uses `hits_v1` the same way. Any other
+  table without its own file falls back to the original `otel_logs`
+  definition, which v1 and v2 share.
   """
   def schema_path(arm, table \\ table()) do
     extension = if arm == "clickhouse", do: "clickhouse.sql", else: "smolquery.json"
@@ -139,6 +143,7 @@ defmodule Bench do
     cond do
       File.exists?(specific) -> specific
       String.starts_with?(table, "onebrc") -> Path.join(root(), "schemas/onebrc_v1.#{extension}")
+      String.starts_with?(table, "hits") -> Path.join(root(), "schemas/hits_v1.#{extension}")
       true -> Path.join(root(), "schemas/otel_logs.#{extension}")
     end
   end

@@ -100,6 +100,15 @@ description = "TSBS cpu-only through the cluster's VictoriaMetrics edge: load on
 env = { BENCHES = "tsbs" }
 run = "elixir scripts/loadgen.exs sweep"
 
+[tasks.bench-clickbench]
+description = "ClickBench: stream CLICKBENCH_FILES hits Parquet files through CLICKBENCH_PIPELINES DuckDB-to-NDJSON upload pipelines, then run the 43 queries three times per mode (single, scatter) from the box, the scatter probe and the comparison report (CLICKBENCH_TABLE, CLICKBENCH_UPLOAD, CLICKBENCH_MODES, CLICKBENCH_COLD)"
+env = { BENCHES = "clickbench" }
+run = "elixir scripts/loadgen.exs sweep"
+
+[tasks.clickbench-report]
+description = "Markdown comparison of one ClickBench run against the published S3 entries (usage: mise run clickbench-report -- results/raw-loadgen/<run>.clickbench.json)"
+run = "elixir scripts/clickbench-report.exs"
+
 [tasks.bench-all]
 description = "All three benches in order: ingest, then pruning, then compaction"
 env = { BENCHES = "ingest,pruning,compaction" }

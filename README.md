@@ -86,6 +86,7 @@ mise run bench-onebrc                # BENCHES=onebrc, TABLE=onebrc_v1
 mise run bench-onebrc-ingest         # BENCHES=onebrc, ingest only, one upload per worker count
 mise run bench-attrs                 # BENCHES=ingest,attrs; SHAPE, TABLE and VUS_LIST from the shell
 mise run bench-tail                  # BENCHES=tail; the last 100 events per project while ingest runs
+mise run bench-clickbench            # BENCHES=clickbench; 100 files of hits (99,997,497 rows) into hits_v2
 mise run bench-all                   # BENCHES=ingest,pruning,compaction
 BENCHES=ingest,pruning mise run bench-sweep
 ```
@@ -104,11 +105,12 @@ itself. To pick a table or a worker list, bypass the task:
 | `pruning` | a `count` and a `scan` query against a live date, an empty date, and no filter; each case also records an `"explain": "analyze"` plan and its engine time | `<label>.prune.json` |
 | `compaction` | compaction outcomes and pod restarts over a long window | `<label>.compact.json` |
 | `onebrc` | the one billion row challenge, in spirit: generate a `station;temperature` CSV on the box, upload it as NDJSON inserts, then time the 1BRC aggregate ten times | `<label>.onebrc.json`, `<label>.upload.json` |
+| `clickbench` | [ClickBench](https://github.com/ClickHouse/ClickBench): stream `CLICKBENCH_FILES` of the 100 `hits` Parquet files through parallel DuckDB-to-NDJSON upload pipelines, then run the 43 queries three times each from the box | `loadgen-clickbench-<table>.clickbench.json` |
 
 The types always run in the order ingest, attrs, tail, pruning,
-compaction, onebrc, whatever order you type them in. Pruning reads the rows ingest writes, and
-compaction needs those rows sealed. `onebrc` stands alone: it has its own
-table, its own generator and its own uploader.
+compaction, onebrc, tsbs, clickbench, whatever order you type them in. Pruning reads the rows ingest writes, and
+compaction needs those rows sealed. `onebrc` and `clickbench` stand alone:
+each has its own table, its own data and its own upload.
 
 Every sweep also samples each pod's metrics into a SQLite database — see
 [Pod metrics sampling](#pod-metrics-sampling).
@@ -595,6 +597,78 @@ point, and the sweep stops after a point that lost rows or hit the
 deadline. Read rows/s, then 429s and other retries, then p99 against p50,
 then 5xx, `rows_failed` and pod restarts, in that order.
 
+### ClickBench
+
+`mise run bench-clickbench` runs the
+[ClickBench](https://github.com/ClickHouse/ClickBench) queries against the
+deployed cluster. smolquery has no bulk import, so the data goes in through
+the insert route like any other.
+
+1. The box downloads the first `CLICKBENCH_FILES` (100) files of
+   `hits_compatible/athena_partitioned`, 16 at a time. This step is not in
+   the load time.
+2. The load runs `CLICKBENCH_PIPELINES` (8) pipelines at once, one file
+   each: `DuckDB COPY ... TO '/dev/stdout' | upload1brc -format ndjson
+   -file /dev/stdin` (`scripts/clickbench/load-file.sh`). The conversion
+   turns the epoch-second time columns into `TIMESTAMP` and `EventDate`
+   into `DATE`. No NDJSON goes to disk. Each pipeline posts with
+   `CLICKBENCH_WORKERS` (6) workers, `CLICKBENCH_ROWS_PER_REQUEST` (4,000,
+   ~9 MB) rows a request. `scripts/clickbench/load-status.py` sums the
+   pipelines for the progress lines.
+3. The sweep waits for the hot tier to drain and checks `count(*)`. The full
+   table is 99,997,497 rows.
+4. It runs one query pass per mode in `CLICKBENCH_MODES`
+   (`single,scatter`): `single` sends `"distributed": false`, `scatter`
+   sends `"distributed": true`. With `CLICKBENCH_COLD=true`, it deletes the
+   query pods before each pass, so every `/cache` starts empty.
+5. In each pass, `tools/cbquery` runs each query in
+   `scripts/clickbench/queries.sql` — ClickBench's `duckdb/queries.sql`,
+   with `hits` replaced by the table — `CLICKBENCH_TRIES` (3) times, **from
+   the box**, straight to `CLICKBENCH_QUERY_POD` (`smolquery-query-0`). It
+   merges the mode into `CLICKBENCH_QUERY_OPTIONS` (`{"fileCache":true}`).
+   Each try records the wall time, `durationMs`, `fileCache` and `scatter`.
+6. **The scatter probe** runs `scripts/clickbench/probe.sql` (ClickBench
+   Q2, which scatters with partials of a few hundred bytes)
+   `CLICKBENCH_PROBE_TRIES` (10) times per mode, warm. The median hot wall
+   time of scatter minus single is the fixed cost of the scatter path.
+   `CLICKBENCH_PROBE_TRIES=0` skips it.
+7. The sweep writes `results/<label>.clickbench.md` with
+   `scripts/clickbench-report.exs` (see below).
+
+The table is `CLICKBENCH_TABLE` (default `hits_v2`). Integer columns are
+`INT64` and text columns are `STRING`, because smolquery has no narrower
+types. `CLICKBENCH_UPLOAD=false` skips the load. `CLICKBENCH_QUERIES=false`
+skips the queries. `CLICKBENCH_ONLY=1,5,30` runs a subset.
+
+Use a c7i.8xlarge box (`LOADGEN_INSTANCE_TYPE`) for the full table: 8
+pipelines use about 24 vCPU for the conversion. The result lands in
+`loadgen-clickbench-<table>.clickbench.json`: `"passes"` holds one
+`cbquery` result per mode, `"probe"` the probe medians and its raw runs.
+
+#### The comparison report
+
+`mise run clickbench-report -- results/raw-loadgen/<run>.clickbench.json`
+writes `results/<run>.clickbench.md`: a summary row per pass, one row per
+published entry and machine with the geomean hot and cold ratio against each
+pass, the probe, and a per-query table. It reads the older single-pass JSON
+too.
+
+- **The comparison set is ClickBench's object-storage entries**:
+  `duckdb-datalake`, `duckdb-datalake-partitioned`, `clickhouse-datalake`,
+  `clickhouse-datalake-partitioned` (`CLICKBENCH_COMPARE`). They read the same
+  Parquet from S3 in eu-central-1, as smolquery does. The local-disk entries
+  measure a different storage model and are left out on purpose.
+- `CLICKBENCH_COMPARE_MACHINES` (`c6a.4xlarge,c6a.metal`) picks the machines.
+- It takes the latest results date of each entry from the GitHub API and
+  names it in the report. ClickBench reruns entries often, so two reports
+  from different days can compare against different numbers.
+- Published JSON is cached in `results/raw-clickbench-published/`.
+- A ratio is ClickBench's: the geometric mean of `(ours + 0.01) / (theirs +
+  0.01)` over the queries both answered. Under 1x means smolquery is faster.
+
+The first try is close to a ClickBench cold run but not equal: a deleted
+pod empties `/cache`, but nothing drops the node's page cache.
+
 The instance is not Terraform-managed. It is found by tag
 `Name=smolquery-bench-loadgen`, and `mise run bench-down` terminates it.
 
@@ -691,7 +765,7 @@ SCALE=100 mise run tsbs-report
 k6/tail.js            the last-100-events query loop, one VU per project, distributed alternating
 tools/genbody/        deterministic OTel NDJSON generator: 63 flat columns, kv, or the ClickStack layout
 tools/gen1brc/        the 1BRC measurements file generator, 413 stations, seeded
-tools/upload1brc/     streams a measurements file as idempotent NDJSON inserts
+tools/upload1brc/     streams a measurements file, or an NDJSON file, as idempotent NDJSON inserts
 tools/tsbsrw/         loads a TSBS line-protocol file through Prometheus remote write
 tools/tsbsdigest/     one hash per TSBS answer, to compare builds without moving the JSON
 tools/watch/          CPU and RSS sampler, ps-based, for the server and k6
@@ -700,6 +774,9 @@ schemas/              smolquery table-create JSON, ClickHouse MergeTree DDL
 schemas/onebrc_stations.sql  the 413 stations and means, generated from tools/gen1brc
 scripts/              setup, run, sweep, stop, report, watch-pods, watch-metrics, loadgen
 scripts/tsbs.exs      TSBS cpu-only against the VictoriaMetrics edge, per smolquery build
+scripts/clickbench/   the 43 ClickBench queries, the scatter probe query, the per-file load pipeline and its status summer
+tools/cbquery/        runs the ClickBench queries from the box against one query pod
+scripts/clickbench-report.exs  a ClickBench run against the published S3 entries, as markdown
 scripts/report_html.exs  the HTML run report generator
 scripts/report/       its CSS and JS, inlined into every report
 mise.toml             every workflow as a task — `mise tasks`
@@ -789,6 +866,8 @@ Adding the column changed the schema, and smolquery answers 409 on a
 | `clickstack_map_v1` | `ORDER BY (project, timestamp)` | clustering `[project, timestamp]` | the ClickStack logs layout, snake_case, plus `project` and `inserted_at`: 15 scalar columns and `resource_attributes`, `scope_attributes`, `log_attributes` as `MAP(STRING, STRING)`; `SHAPE=clickstack` |
 | `clickstack_variant_v1` | same, attributes as `JSON` | same | the same columns with the three attribute bags as `VARIANT` |
 | `clickstack_map_v2`, `clickstack_variant_v2` | same | same | the same schemas, fed the stamped body (`log_attributes['ingest.stamp']` varies per request) — the tables to compare; `_v1` hold the unstamped, dictionary-compressed rows |
+| `hits_v1` | `ORDER BY (CounterID, EventDate, UserID, EventTime, WatchID)` | clustering `[CounterID, EventDate, UserID, EventTime]` | ClickBench's `hits`: 105 columns, integers as `INT64`, text as `STRING`, ~2.3 KB/row as NDJSON; `BENCHES=clickbench`. Any `hits*` table takes this schema and clustering. **Holds the first 10M rows (files 0 to 9) since 2026-10-03** |
+| `hits_v2` | same | same | the full ClickBench `hits`, 99,997,497 rows, loaded 2026-10-03 |
 | `clickstack_map_p64` | `PARTITION BY (project, toDate(timestamp))` | same, `partitions: 64` | the 2026-08-27 pathological table: 64 write partitions and `DAYS=30` timestamps — the nearest smolquery analog of a per-project, per-day partition key |
 
 `otel_logs_v3` is what `TABLE` defaults to. It exists to answer one question:
@@ -805,6 +884,17 @@ like-for-like. Say which mechanism produced each number.
 collects NULLs in a partition of their own.
 
 ## Reference numbers
+
+ClickBench on the full 100M rows, 2026-10-04 (`main@947dfa0`, 8GB job
+engine, 32 threads): **on one c6a.4xlarge query node (`"distributed":
+false`), all 43 pass, 57.6 s hot sum: 0.67x `duckdb-datalake` hot and
+0.52x `clickhouse-datalake` cold** (geomean ratios; under 1 is faster),
+the published entries that also read S3. ClickHouse is 1.97x faster hot.
+Scatter across 3 nodes was slower (103.4 s): the probe measured 1.45 s of
+fixed overhead per scattered query. Load: 99,997,497 rows in 680.8 s,
+146,882 rows/s. See
+`results/2026-10-03-clickbench-100m.md`. The 10M run (old m7i.xlarge query
+tier) is in `results/2026-10-03-clickbench-10m.md`.
 
 TSBS through the VictoriaMetrics edge, 2026-09-24 (`main@f4303d0`, the
 pushdown stack): **every `cpu-only` query type answers at scale 100 in 0.7 to
