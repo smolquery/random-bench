@@ -11,7 +11,8 @@ via `POST …/insert` (`application/x-ndjson`), ClickHouse via
 
 macOS with k6 and ClickHouse (`brew install k6 clickhouse`), Go, Elixir 1.20 or
 later, and a smolquery checkout with compiled deps (`SMOLQUERY_DIR`, default
-`~/Dev/supabase/smolquery`).
+`~/Dev/supabase/smolquery`). The Postgres arm needs `psql`
+(`brew install libpq`) and nothing else.
 
 **Every result in this repo was measured on Erlang/OTP 29.** On 2026-08-17 OTP
 27.3.4.6 measured **6.2% faster** at 1 VU, with non-overlapping ranges, and it
@@ -38,6 +39,15 @@ scripts/stop.exs                     # stops both servers
 
 scripts/sweep.exs smolquery          # full VU sweep, VUS_LIST="1 4 8 16 32 64"
 scripts/sweep.exs clickhouse         # cold table before each run
+```
+
+The Postgres arm needs only `psql` and a `PG_URL` in `.env` — see
+[The Postgres arm](#the-postgres-arm):
+
+```sh
+mise run pg-check                    # connect, print the server settings and the round trip
+mise run pg-setup                    # bench_onebrc, 413 stations, the station index
+mise run pg-cliff                    # add 50k rows per step, time the reads, stop at the cliff
 ```
 
 Against a deployed cluster, use the `remote` arm:
@@ -672,6 +682,109 @@ pod empties `/cache`, but nothing drops the node's page cache.
 The instance is not Terraform-managed. It is found by tag
 `Name=smolquery-bench-loadgen`, and `mise run bench-down` terminates it.
 
+## The Postgres arm
+
+One question: **at how many rows does a read on a small Postgres instance stop
+being cheap?** The run adds rows in 50,000-row steps and times the same three
+reads after every step. It stops at the first read that passes `PG_SLOW_MS`.
+
+### Credentials
+
+Put the connection string in a gitignored `.env` at the repo root. Copy
+`.env.example`:
+
+```sh
+cp .env.example .env      # then edit PG_URL
+```
+
+```
+PG_URL=postgres://postgres:password@db.example.supabase.co:5432/postgres?sslmode=require
+```
+
+The bench parses the URL and passes `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`,
+`PGDATABASE` and `PGSSLMODE` to `psql` as environment variables. The password
+never reaches a command line, so it stays out of `ps` and out of the shell
+history. `DATABASE_URL` works too. `ENV_FILE=path` reads a different file.
+
+### Run it
+
+```sh
+mise run pg-check                    # connect, print the server settings and the round trip
+mise run pg-setup                    # bench_onebrc, 413 stations, the station index
+mise run pg-cliff                    # add 50k rows per step, time the reads, stop at the cliff
+mise run pg-report                   # markdown table for the newest run
+
+elixir scripts/pg-onebrc.exs probe   # one checkpoint against the table as it stands, no insert
+```
+
+`probe` retests a row count the run already passed. Use it before you believe a
+single slow reading — a read that repeats fast under `probe` met contention, not
+a limit.
+
+`pg-setup` drops and recreates the table. Set `PG_TRUNCATE=false` to keep the
+rows already there and add to them.
+
+### What it measures
+
+The rows are generated **inside the server**, by `generate_series` against the
+413-station table, with the station names and means of `tools/gen1brc`. No
+client uplink sits in the measurement. `setseed` per batch makes a rerun write
+the same rows.
+
+Three read shapes run at each checkpoint, `PG_QUERY_REPEATS` times each,
+reported as min, median and max:
+
+| shape | query | what it shows |
+|---|---|---|
+| `agg_all` | the 1BRC query: `GROUP BY station` over the whole table | the sequential scan curve |
+| `station` | one station's min/avg/max | the index path, and when the index leaves the cache |
+| `count` | `count(*)` | the cheap floor |
+| `noop` | `SELECT 1` | the network round trip under every other number |
+
+Each shape also gets one `EXPLAIN (ANALYZE, BUFFERS)`. Read the **shared read
+blocks** beside the wall time. A read that slows while `shared_read` stays near
+zero is CPU or a plan flip. A read that slows as `shared_read` climbs left the
+page cache — that is the cliff.
+
+The first result is
+[results/2026-08-31-postgres-read-cliff.md](results/2026-08-31-postgres-read-cliff.md):
+on a 224 MB `shared_buffers` instance, reads fall over at **5M rows**, where the
+table passes the buffer pool. `effective_cache_size` does not predict it.
+
+### Knobs
+
+| variable | default | meaning |
+|---|---|---|
+| `PG_URL` | — | the connection string; `.env` holds it |
+| `PG_BATCH_ROWS` | `50000` | rows per insert step |
+| `PG_MEASURE_EVERY` | `1` | batches per checkpoint; raise it to reach a high row count faster |
+| `PG_QUERY_REPEATS` | `3` | timed runs per read shape per checkpoint |
+| `PG_MAX_ROWS` | `1000000000` | stop at this many rows |
+| `PG_SLOW_MS` | `10000` | stop when the median `agg_all` passes this |
+| `PG_MAX_BYTES` | `0` | stop at this total relation size; `0` turns it off |
+| `PG_DEADLINE_S` | `0` | stop after this many seconds; `0` turns it off |
+| `PG_INDEX` | `true` | create a B-tree index on `station` |
+| `PG_EXPLAIN` | `true` | run one `EXPLAIN (ANALYZE, BUFFERS)` per shape per checkpoint |
+| `PG_TRUNCATE` | `true` | `pg-setup` drops the table first |
+| `PG_TABLE` | `bench_onebrc` | the table name |
+| `PG_STATION` | `Abha` | the station the `station` shape reads |
+| `PG_SEED` | `42` | the seed behind `setseed` |
+| `PG_QUERY_TIMEOUT_MS` | `600000` | `statement_timeout` for the reads |
+| `PG_LABEL` | `pg-cliff` | result file prefix |
+| `RESULTS` | `results/raw-pg` | where the JSON lands |
+
+**Raise `PG_BATCH_ROWS` for anything past a few hundred thousand rows.** At
+50,000 rows per insert the write measures the round trip, not the server — 28k
+rows/s against 86k rows/s at 1,000,000 rows per insert.
+
+**Set a stop limit before an unattended run.** 1,000,000,000 rows need roughly
+30 GB for the table and as much again for the index. `PG_MAX_BYTES` or
+`PG_MAX_ROWS` keeps a small instance's disk safe. An insert that fails also
+stops the run, and its error text goes into the JSON.
+
+The run writes `results/raw-pg/<label>-<stamp>.pgcliff.json` after **every**
+checkpoint, so a killed run keeps everything it measured.
+
 ## The TSBS arm
 
 TSBS runs in two places. `mise run bench-tsbs` runs it against the deployed
@@ -770,9 +883,10 @@ tools/tsbsrw/         loads a TSBS line-protocol file through Prometheus remote 
 tools/tsbsdigest/     one hash per TSBS answer, to compare builds without moving the JSON
 tools/watch/          CPU and RSS sampler, ps-based, for the server and k6
 k6/insert.js          load script, closed loop (VUS) or open loop (RATE)
-schemas/              smolquery table-create JSON, ClickHouse MergeTree DDL
+schemas/              smolquery table-create JSON, ClickHouse MergeTree DDL, Postgres DDL
 schemas/onebrc_stations.sql  the 413 stations and means, generated from tools/gen1brc
 scripts/              setup, run, sweep, stop, report, watch-pods, watch-metrics, loadgen
+scripts/pg-onebrc.exs the Postgres read-cliff bench: setup, run, report
 scripts/tsbs.exs      TSBS cpu-only against the VictoriaMetrics edge, per smolquery build
 scripts/clickbench/   the 43 ClickBench queries, the scatter probe query, the per-file load pipeline and its status summer
 tools/cbquery/        runs the ClickBench queries from the box against one query pod
@@ -783,6 +897,7 @@ mise.toml             every workflow as a task — `mise tasks`
 results/raw/          k6 and watch JSON per run (gitignored)
 results/raw-remote*/  the same, plus *.pods.json, for the remote arm
 results/raw-loadgen/  the in-region load generator's runs, plus *.metrics.sqlite3 per sweep
+results/raw-pg/       the Postgres read-cliff runs (gitignored)
 results/raw-tsbs/     the TSBS load and query runs (gitignored)
 results/*.md          dated baseline writeups
 results/*.html        one charted report per load test, beside its writeup

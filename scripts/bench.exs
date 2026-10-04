@@ -137,7 +137,13 @@ defmodule Bench do
   definition, which v1 and v2 share.
   """
   def schema_path(arm, table \\ table()) do
-    extension = if arm == "clickhouse", do: "clickhouse.sql", else: "smolquery.json"
+    extension =
+      case arm do
+        "clickhouse" -> "clickhouse.sql"
+        "postgres" -> "postgres.sql"
+        _ -> "smolquery.json"
+      end
+
     specific = Path.join(root(), "schemas/#{table}.#{extension}")
 
     cond do

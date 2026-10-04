@@ -134,6 +134,24 @@ run = "elixir scripts/loadgen.exs ssh"
 description = "Terminate the load generator"
 run = "elixir scripts/loadgen.exs down"
 
+# ── postgres arm ─────────────────────────────────────────────────────────────
+
+[tasks.pg-check]
+description = "Connect to the Postgres in .env and print its version, settings and round trip"
+run = "elixir scripts/pg-onebrc.exs check"
+
+[tasks.pg-setup]
+description = "Create bench_onebrc, the 413 stations and the station index on the Postgres in .env"
+run = "elixir scripts/pg-onebrc.exs setup"
+
+[tasks.pg-cliff]
+description = "Add rows 50k at a time and time the reads at every checkpoint, until a read falls over"
+run = "elixir scripts/pg-onebrc.exs run"
+
+[tasks.pg-report]
+description = "Markdown table for the newest cliff run (usage: mise run pg-report -- results/raw-pg/<run>.pgcliff.json)"
+run = "elixir scripts/pg-onebrc.exs report"
+
 # ── TSBS against one local node's VictoriaMetrics edge ───────────────────────
 
 [tasks.tsbs-setup]
