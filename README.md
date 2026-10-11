@@ -1,11 +1,27 @@
-# smolquery_bench
+# random_bench
 
-Ingest benchmark: [smolquery](https://github.com/chasers/smolquery) against
-ClickHouse, as fairly as possible, following
-[abc3/load-rig](https://github.com/abc3/load-rig). Both arms get the **identical
-NDJSON body** — 3,062 OpenTelemetry log rows × 63 columns, 6.87 MiB — smolquery
-via `POST …/insert` (`application/x-ndjson`), ClickHouse via
-`INSERT … FORMAT JSONEachRow`.
+Benchmarks we run when a question comes up. Most of them measure
+[smolquery](https://github.com/chasers/smolquery), on this machine or on the
+deployed sandbox cluster. Each bench answers one question and records its
+answer in `results/`, one dated write-up per run.
+
+The benches:
+
+- **Ingest, smolquery against ClickHouse**, locally, as fairly as possible,
+  following [abc3/load-rig](https://github.com/abc3/load-rig). Both arms get
+  the **identical NDJSON body** — 3,062 OpenTelemetry log rows × 63 columns,
+  6.87 MiB — smolquery via `POST …/insert` (`application/x-ndjson`),
+  ClickHouse via `INSERT … FORMAT JSONEachRow`.
+- **Remote sweeps** from an in-region load generator against the sandbox:
+  ingest, pruning, compaction, attribute bags, and the tail query under
+  ingest.
+- **The one billion row challenge**: upload rate and the 1BRC aggregate, plus
+  a Postgres arm for the read cliff.
+- **TSBS** through the VictoriaMetrics edge.
+- **ClickBench** on the sandbox query tier.
+
+Start with the bench you need below. The headline numbers are under
+[Reference numbers](#reference-numbers).
 
 ## Prerequisites
 

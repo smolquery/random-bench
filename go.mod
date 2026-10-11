@@ -1,4 +1,4 @@
-module smolquery_bench
+module random_bench
 
 go 1.26
 

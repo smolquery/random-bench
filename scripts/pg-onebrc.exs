@@ -133,7 +133,7 @@ defmodule Bench.PgOnebrc do
       {"PGSSLMODE", query["sslmode"]},
       {"PGOPTIONS", query["options"]},
       {"PGCONNECT_TIMEOUT", Bench.env("PGCONNECT_TIMEOUT", "15")},
-      {"PGAPPNAME", "smolquery_bench pg-onebrc"},
+      {"PGAPPNAME", "random_bench pg-onebrc"},
       {"LC_ALL", "C"}
     ]
     |> Enum.reject(fn {_name, value} -> value in [nil, ""] end)
