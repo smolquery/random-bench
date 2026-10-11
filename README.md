@@ -977,6 +977,7 @@ Adding the column changed the schema, and smolquery answers 409 on a
 | `onebrc_v4` | same | same | the 2026-08-24 48-worker follow-up, ingest only |
 | `onebrc_v5` | same | same | the 2026-08-25 48-worker re-check on `main@18117bb`, with the query phase — exactly 1B rows |
 | `onebrc_v6` | same | same | the 2026-08-26 48-worker re-check on `main@1a6a543` (F-1 and F-2 fixes), with the query phase — exactly 1B rows |
+| `onebrc_v7_w<N>` | same | same | one table per point of the 2026-10-08 worker sweep on 0.20.0 (`main@390f430`), ingest only — each exactly 1B rows |
 | `otel_logs_v34` | same as v3 | clustering `[project_id, timestamp]` | the flat control for the 2026-08-27 attributes bench (T-393): the same 63 columns, fresh |
 | `clickstack_map_v1` | `ORDER BY (project, timestamp)` | clustering `[project, timestamp]` | the ClickStack logs layout, snake_case, plus `project` and `inserted_at`: 15 scalar columns and `resource_attributes`, `scope_attributes`, `log_attributes` as `MAP(STRING, STRING)`; `SHAPE=clickstack` |
 | `clickstack_variant_v1` | same, attributes as `JSON` | same | the same columns with the three attribute bags as `VARIANT` |
@@ -1035,6 +1036,14 @@ Re-checked again 2026-08-26 on `main@1a6a543` (the F-1 and F-2 replication
 fixes): 9,703,402 rows/s in 103.1 s, 11.30 s aggregate, 78 puts at 188 ms —
 the fixes cost nothing on a clean upload
 ([results/2026-08-26-onebrc-v6-post-f1-f2.md](results/2026-08-26-onebrc-v6-post-f1-f2.md)).
+The worker curve again, 2026-10-08 on 0.20.0 (`main@390f430`), same api and
+buffer shape: **peak 8,821,698 rows/s at 48 workers**, flat within 3% from 32
+to 128, 7–12% below 0.16.0 at every point. The commit's `encode` phase
+costs 10% more per row, cause open; the leads are deploy changes
+(`MALLOC_ARENA_MAX=2` on buffer and storage, the cluster's own metrics and
+logs now ingested on the same cores), not code. The 429 reset bug is
+fixed: 5,643 refusals, zero other retries
+([results/2026-10-08-onebrc-ingest-0.20.md](results/2026-10-08-onebrc-ingest-0.20.md)).
 
 Attribute bags, 2026-08-27 (T-393, `main@43f1b30`): **`MAP(STRING, STRING)`
 is the type to recommend.** With per-row unique values in the bag, every
