@@ -1,5 +1,13 @@
 ## TL;DR
 
+**VictoriaLogs' own ingest bench: smolquery 168,760 lines/s against
+VictoriaLogs' 141,468, at 8 cores each — after tuning.** As deployed,
+smolquery stores 53,874: every insert waits out the 1-second group-commit
+window, so 32 requests in flight cannot carry more. A 100 ms window and a
+CPU split toward storage gave the 3.1x, with sealing at parity. The short
+window costs hot files per query, which this bench did not measure. See
+[2026-11-05-vlogs-structured-ingest.md](2026-11-05-vlogs-structured-ingest.md).
+
 **The merge engine's memory budget was the ceiling.**
 `SMOLQUERY_STORAGE_MEMORY_LIMIT` 2048MiB -> 3584MiB tripled sealed throughput:
 the same config measured `seal:commit` **0.329** then **0.988**.

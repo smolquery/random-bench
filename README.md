@@ -1,17 +1,37 @@
-# smolquery_bench
+# random_bench
 
-Ingest benchmark: [smolquery](https://github.com/chasers/smolquery) against
-ClickHouse, as fairly as possible, following
-[abc3/load-rig](https://github.com/abc3/load-rig). Both arms get the **identical
-NDJSON body** — 3,062 OpenTelemetry log rows × 63 columns, 6.87 MiB — smolquery
-via `POST …/insert` (`application/x-ndjson`), ClickHouse via
-`INSERT … FORMAT JSONEachRow`.
+Benchmarks we run when a question comes up. Most of them measure
+[smolquery](https://github.com/chasers/smolquery), on this machine or on the
+deployed sandbox cluster. Each bench answers one question and records its
+answer in `results/`, one dated write-up per run.
+
+The benches:
+
+- **Ingest, smolquery against ClickHouse**, locally, as fairly as possible,
+  following [abc3/load-rig](https://github.com/abc3/load-rig). Both arms get
+  the **identical NDJSON body** — 3,062 OpenTelemetry log rows × 63 columns,
+  6.87 MiB — smolquery via `POST …/insert` (`application/x-ndjson`),
+  ClickHouse via `INSERT … FORMAT JSONEachRow`.
+- **Remote sweeps** from an in-region load generator against the sandbox:
+  ingest, pruning, compaction, attribute bags, and the tail query under
+  ingest.
+- **The one billion row challenge**: upload rate and the 1BRC aggregate, plus
+  a Postgres arm for the read cliff.
+- **TSBS** through the VictoriaMetrics edge.
+- **ClickBench** on the sandbox query tier.
+- **VictoriaLogs' structured-log ingest ramp**
+  ([VictoriaMetrics/logs-benchmark](https://github.com/VictoriaMetrics/logs-benchmark)):
+  one generator feeds VictoriaLogs and smolquery at once.
+
+Start with the bench you need below. The headline numbers are under
+[Reference numbers](#reference-numbers).
 
 ## Prerequisites
 
 macOS with k6 and ClickHouse (`brew install k6 clickhouse`), Go, Elixir 1.20 or
 later, and a smolquery checkout with compiled deps (`SMOLQUERY_DIR`, default
-`~/Dev/supabase/smolquery`).
+`~/Dev/supabase/smolquery`). The Postgres arm needs `psql`
+(`brew install libpq`) and nothing else.
 
 **Every result in this repo was measured on Erlang/OTP 29.** On 2026-08-17 OTP
 27.3.4.6 measured **6.2% faster** at 1 VU, with non-overlapping ranges, and it
@@ -38,6 +58,15 @@ scripts/stop.exs                     # stops both servers
 
 scripts/sweep.exs smolquery          # full VU sweep, VUS_LIST="1 4 8 16 32 64"
 scripts/sweep.exs clickhouse         # cold table before each run
+```
+
+The Postgres arm needs only `psql` and a `PG_URL` in `.env` — see
+[The Postgres arm](#the-postgres-arm):
+
+```sh
+mise run pg-check                    # connect, print the server settings and the round trip
+mise run pg-setup                    # bench_onebrc, 413 stations, the station index
+mise run pg-cliff                    # add 50k rows per step, time the reads, stop at the cliff
 ```
 
 Against a deployed cluster, use the `remote` arm:
@@ -86,6 +115,8 @@ mise run bench-onebrc                # BENCHES=onebrc, TABLE=onebrc_v1
 mise run bench-onebrc-ingest         # BENCHES=onebrc, ingest only, one upload per worker count
 mise run bench-attrs                 # BENCHES=ingest,attrs; SHAPE, TABLE and VUS_LIST from the shell
 mise run bench-tail                  # BENCHES=tail; the last 100 events per project while ingest runs
+mise run bench-clickbench            # BENCHES=clickbench; 100 files of hits (99,997,497 rows) into hits_v2
+mise run bench-vlogs                 # BENCHES=vlogs, TABLE=vlogs_v1; the logs-benchmark ramp, VictoriaLogs and smolquery at once
 mise run bench-all                   # BENCHES=ingest,pruning,compaction
 BENCHES=ingest,pruning mise run bench-sweep
 ```
@@ -104,11 +135,13 @@ itself. To pick a table or a worker list, bypass the task:
 | `pruning` | a `count` and a `scan` query against a live date, an empty date, and no filter; each case also records an `"explain": "analyze"` plan and its engine time | `<label>.prune.json` |
 | `compaction` | compaction outcomes and pod restarts over a long window | `<label>.compact.json` |
 | `onebrc` | the one billion row challenge, in spirit: generate a `station;temperature` CSV on the box, upload it as NDJSON inserts, then time the 1BRC aggregate ten times | `<label>.onebrc.json`, `<label>.upload.json` |
+| `clickbench` | [ClickBench](https://github.com/ClickHouse/ClickBench): stream `CLICKBENCH_FILES` of the 100 `hits` Parquet files through parallel DuckDB-to-NDJSON upload pipelines, then run the 43 queries three times each from the box | `loadgen-clickbench-<table>.clickbench.json` |
+| `vlogs` | VictoriaMetrics' structured-log ingest ramp: the upstream writer sends the same lines to VictoriaLogs and smolquery, a querier counts stored rows every 15 s, and each step records stored rate, drops, CPU, anonymous memory and disk writes | `loadgen-vlogs-<stamp><suffix>.vlogs.json` |
 
 The types always run in the order ingest, attrs, tail, pruning,
-compaction, onebrc, whatever order you type them in. Pruning reads the rows ingest writes, and
-compaction needs those rows sealed. `onebrc` stands alone: it has its own
-table, its own generator and its own uploader.
+compaction, onebrc, tsbs, clickbench, vlogs, whatever order you type them in. Pruning reads the rows ingest writes, and
+compaction needs those rows sealed. `onebrc`, `clickbench` and `vlogs` stand alone:
+each has its own table, its own data and its own upload.
 
 Every sweep also samples each pod's metrics into a SQLite database — see
 [Pod metrics sampling](#pod-metrics-sampling).
@@ -595,8 +628,239 @@ point, and the sweep stops after a point that lost rows or hit the
 deadline. Read rows/s, then 429s and other retries, then p99 against p50,
 then 5xx, `rows_failed` and pod restarts, in that order.
 
+### ClickBench
+
+`mise run bench-clickbench` runs the
+[ClickBench](https://github.com/ClickHouse/ClickBench) queries against the
+deployed cluster. smolquery has no bulk import, so the data goes in through
+the insert route like any other.
+
+1. The box downloads the first `CLICKBENCH_FILES` (100) files of
+   `hits_compatible/athena_partitioned`, 16 at a time. This step is not in
+   the load time.
+2. The load runs `CLICKBENCH_PIPELINES` (8) pipelines at once, one file
+   each: `DuckDB COPY ... TO '/dev/stdout' | upload1brc -format ndjson
+   -file /dev/stdin` (`scripts/clickbench/load-file.sh`). The conversion
+   turns the epoch-second time columns into `TIMESTAMP` and `EventDate`
+   into `DATE`. No NDJSON goes to disk. Each pipeline posts with
+   `CLICKBENCH_WORKERS` (6) workers, `CLICKBENCH_ROWS_PER_REQUEST` (4,000,
+   ~9 MB) rows a request. `scripts/clickbench/load-status.py` sums the
+   pipelines for the progress lines.
+3. The sweep waits for the hot tier to drain and checks `count(*)`. The full
+   table is 99,997,497 rows.
+4. It runs one query pass per mode in `CLICKBENCH_MODES`
+   (`single,scatter`): `single` sends `"distributed": false`, `scatter`
+   sends `"distributed": true`. With `CLICKBENCH_COLD=true`, it deletes the
+   query pods before each pass, so every `/cache` starts empty.
+5. In each pass, `tools/cbquery` runs each query in
+   `scripts/clickbench/queries.sql` — ClickBench's `duckdb/queries.sql`,
+   with `hits` replaced by the table — `CLICKBENCH_TRIES` (3) times, **from
+   the box**, straight to `CLICKBENCH_QUERY_POD` (`smolquery-query-0`). It
+   merges the mode into `CLICKBENCH_QUERY_OPTIONS` (`{"fileCache":true}`).
+   Each try records the wall time, `durationMs`, `fileCache` and `scatter`.
+6. **The scatter probe** runs `scripts/clickbench/probe.sql` (ClickBench
+   Q2, which scatters with partials of a few hundred bytes)
+   `CLICKBENCH_PROBE_TRIES` (10) times per mode, warm. The median hot wall
+   time of scatter minus single is the fixed cost of the scatter path.
+   `CLICKBENCH_PROBE_TRIES=0` skips it.
+7. The sweep writes `results/<label>.clickbench.md` with
+   `scripts/clickbench-report.exs` (see below).
+
+The table is `CLICKBENCH_TABLE` (default `hits_v2`). Integer columns are
+`INT64` and text columns are `STRING`, because smolquery has no narrower
+types. `CLICKBENCH_UPLOAD=false` skips the load. `CLICKBENCH_QUERIES=false`
+skips the queries. `CLICKBENCH_ONLY=1,5,30` runs a subset.
+
+Use a c7i.8xlarge box (`LOADGEN_INSTANCE_TYPE`) for the full table: 8
+pipelines use about 24 vCPU for the conversion. The result lands in
+`loadgen-clickbench-<table>.clickbench.json`: `"passes"` holds one
+`cbquery` result per mode, `"probe"` the probe medians and its raw runs.
+
+#### The comparison report
+
+`mise run clickbench-report -- results/raw-loadgen/<run>.clickbench.json`
+writes `results/<run>.clickbench.md`: a summary row per pass, one row per
+published entry and machine with the geomean hot and cold ratio against each
+pass, the probe, and a per-query table. It reads the older single-pass JSON
+too.
+
+- **The comparison set is ClickBench's object-storage entries**:
+  `duckdb-datalake`, `duckdb-datalake-partitioned`, `clickhouse-datalake`,
+  `clickhouse-datalake-partitioned` (`CLICKBENCH_COMPARE`). They read the same
+  Parquet from S3 in eu-central-1, as smolquery does. The local-disk entries
+  measure a different storage model and are left out on purpose.
+- `CLICKBENCH_COMPARE_MACHINES` (`c6a.4xlarge,c6a.metal`) picks the machines.
+- It takes the latest results date of each entry from the GitHub API and
+  names it in the report. ClickBench reruns entries often, so two reports
+  from different days can compare against different numbers.
+- Published JSON is cached in `results/raw-clickbench-published/`.
+- A ratio is ClickBench's: the geometric mean of `(ours + 0.01) / (theirs +
+  0.01)` over the queries both answered. Under 1x means smolquery is faster.
+
+The first try is close to a ClickBench cold run but not equal: a deleted
+pod empties `/cache`, but nothing drops the node's page cache.
+
 The instance is not Terraform-managed. It is found by tag
 `Name=smolquery-bench-loadgen`, and `mise run bench-down` terminates it.
+
+### VictoriaLogs structured-log ingest
+
+`mise run bench-vlogs` reproduces benchmark 1 of
+[VictoriaMetrics/logs-benchmark](https://github.com/VictoriaMetrics/logs-benchmark)
+with two systems: VictoriaLogs and smolquery. The write-up is
+`results/2026-11-05-vlogs-structured-ingest.md`.
+
+**The writer is upstream's own.** `tools/vlogs/build.sh` clones the repo at
+a pinned commit (`d6c59e9`), copies in one adapter
+(`tools/vlogs/smolquery.go`), adds the two `case "smolquery"` lines, and
+builds `cmd/bench` with `-tags vlogs`. The tag keeps the adapter out of this
+repo's own Go build. Every line goes to both systems, as upstream sends
+every line to all six of its systems.
+
+1. Run `mise run bench-up`. A 16-vCPU box is enough:
+   `LOADGEN_INSTANCE_TYPE=c7i.4xlarge`.
+2. Run `mise run vlogs-up`. It launches `smolquery-bench-vlogs`, an
+   m6a.2xlarge (8 vCPU AMD Milan, 32 GiB, against upstream's
+   n2d-standard-8) with a 500 GiB gp3 data disk at 280 MiB/s and 3,000 IOPS,
+   and installs VictoriaLogs `VLOGS_VERSION` (v1.53.0) at its defaults.
+3. Run `BASE_URL=… mise run bench-vlogs`. Each run wipes VictoriaLogs'
+   data, starts the writer, the querier and a sampler on the box under
+   systemd, and samples pod CPU and anonymous memory from this machine once
+   per step.
+4. Run `mise run vlogs-down` and `mise run bench-down` when you finish.
+
+`elixir scripts/loadgen.exs vlogs-report <file.vlogs.json>` rebuilds the step
+table from a saved run. The raw samples are written before the summary, so
+a summary bug cannot lose a run.
+
+| knob | default | upstream |
+|---|---|---|
+| `VLOGS_RATE` | 10000 | 10000 |
+| `VLOGS_STEP` | 10000 | 10000 |
+| `VLOGS_MAX` | 150000 | 180000 |
+| `VLOGS_INTERVAL_S` | 300 | 600 |
+| `VLOGS_BATCH_LINES` | 2000 | 2000 |
+| `VLOGS_WORKERS` | 32 | 32 |
+| `VLOGS_SETTLE_S` | 120 | — |
+
+The writer always runs `-hosts 125 -apps 40 -seed 1 -buffer 400000
+-dropOnFull`, as upstream does. **Read a step's stored rate, not its sent
+rate.** A system that cannot keep up fills its queue, and the writer drops
+its share of the lines, for that system only.
+
+Three traps:
+
+- **The querier counts through the query pods.** The api pods answer
+  `POST /v1/queries` with a 503. `VLOGS_QUERY_SERVICE` (default
+  `smolquery-query`) picks the service.
+- **`SMOLQUERY_API_KEY` reaches the box through SSM Parameter Store**, like
+  every other bench. `bench-start.sh` puts it in the systemd units' env.
+- **The cluster's own Vector shippers also insert**, about 20 small
+  requests/s. The api insert histogram mixes them in. For the bench's own
+  ack latency, divide the in-flight count by the request rate.
+
+## The Postgres arm
+
+One question: **at how many rows does a read on a small Postgres instance stop
+being cheap?** The run adds rows in 50,000-row steps and times the same three
+reads after every step. It stops at the first read that passes `PG_SLOW_MS`.
+
+### Credentials
+
+Put the connection string in a gitignored `.env` at the repo root. Copy
+`.env.example`:
+
+```sh
+cp .env.example .env      # then edit PG_URL
+```
+
+```
+PG_URL=postgres://postgres:password@db.example.supabase.co:5432/postgres?sslmode=require
+```
+
+The bench parses the URL and passes `PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`,
+`PGDATABASE` and `PGSSLMODE` to `psql` as environment variables. The password
+never reaches a command line, so it stays out of `ps` and out of the shell
+history. `DATABASE_URL` works too. `ENV_FILE=path` reads a different file.
+
+### Run it
+
+```sh
+mise run pg-check                    # connect, print the server settings and the round trip
+mise run pg-setup                    # bench_onebrc, 413 stations, the station index
+mise run pg-cliff                    # add 50k rows per step, time the reads, stop at the cliff
+mise run pg-report                   # markdown table for the newest run
+
+elixir scripts/pg-onebrc.exs probe   # one checkpoint against the table as it stands, no insert
+```
+
+`probe` retests a row count the run already passed. Use it before you believe a
+single slow reading — a read that repeats fast under `probe` met contention, not
+a limit.
+
+`pg-setup` drops and recreates the table. Set `PG_TRUNCATE=false` to keep the
+rows already there and add to them.
+
+### What it measures
+
+The rows are generated **inside the server**, by `generate_series` against the
+413-station table, with the station names and means of `tools/gen1brc`. No
+client uplink sits in the measurement. `setseed` per batch makes a rerun write
+the same rows.
+
+Three read shapes run at each checkpoint, `PG_QUERY_REPEATS` times each,
+reported as min, median and max:
+
+| shape | query | what it shows |
+|---|---|---|
+| `agg_all` | the 1BRC query: `GROUP BY station` over the whole table | the sequential scan curve |
+| `station` | one station's min/avg/max | the index path, and when the index leaves the cache |
+| `count` | `count(*)` | the cheap floor |
+| `noop` | `SELECT 1` | the network round trip under every other number |
+
+Each shape also gets one `EXPLAIN (ANALYZE, BUFFERS)`. Read the **shared read
+blocks** beside the wall time. A read that slows while `shared_read` stays near
+zero is CPU or a plan flip. A read that slows as `shared_read` climbs left the
+page cache — that is the cliff.
+
+The first result is
+[results/2026-08-31-postgres-read-cliff.md](results/2026-08-31-postgres-read-cliff.md):
+on a 224 MB `shared_buffers` instance, reads fall over at **5M rows**, where the
+table passes the buffer pool. `effective_cache_size` does not predict it.
+
+### Knobs
+
+| variable | default | meaning |
+|---|---|---|
+| `PG_URL` | — | the connection string; `.env` holds it |
+| `PG_BATCH_ROWS` | `50000` | rows per insert step |
+| `PG_MEASURE_EVERY` | `1` | batches per checkpoint; raise it to reach a high row count faster |
+| `PG_QUERY_REPEATS` | `3` | timed runs per read shape per checkpoint |
+| `PG_MAX_ROWS` | `1000000000` | stop at this many rows |
+| `PG_SLOW_MS` | `10000` | stop when the median `agg_all` passes this |
+| `PG_MAX_BYTES` | `0` | stop at this total relation size; `0` turns it off |
+| `PG_DEADLINE_S` | `0` | stop after this many seconds; `0` turns it off |
+| `PG_INDEX` | `true` | create a B-tree index on `station` |
+| `PG_EXPLAIN` | `true` | run one `EXPLAIN (ANALYZE, BUFFERS)` per shape per checkpoint |
+| `PG_TRUNCATE` | `true` | `pg-setup` drops the table first |
+| `PG_TABLE` | `bench_onebrc` | the table name |
+| `PG_STATION` | `Abha` | the station the `station` shape reads |
+| `PG_SEED` | `42` | the seed behind `setseed` |
+| `PG_QUERY_TIMEOUT_MS` | `600000` | `statement_timeout` for the reads |
+| `PG_LABEL` | `pg-cliff` | result file prefix |
+| `RESULTS` | `results/raw-pg` | where the JSON lands |
+
+**Raise `PG_BATCH_ROWS` for anything past a few hundred thousand rows.** At
+50,000 rows per insert the write measures the round trip, not the server — 28k
+rows/s against 86k rows/s at 1,000,000 rows per insert.
+
+**Set a stop limit before an unattended run.** 1,000,000,000 rows need roughly
+30 GB for the table and as much again for the index. `PG_MAX_BYTES` or
+`PG_MAX_ROWS` keeps a small instance's disk safe. An insert that fails also
+stops the run, and its error text goes into the JSON.
+
+The run writes `results/raw-pg/<label>-<stamp>.pgcliff.json` after **every**
+checkpoint, so a killed run keeps everything it measured.
 
 ## The TSBS arm
 
@@ -691,21 +955,27 @@ SCALE=100 mise run tsbs-report
 k6/tail.js            the last-100-events query loop, one VU per project, distributed alternating
 tools/genbody/        deterministic OTel NDJSON generator: 63 flat columns, kv, or the ClickStack layout
 tools/gen1brc/        the 1BRC measurements file generator, 413 stations, seeded
-tools/upload1brc/     streams a measurements file as idempotent NDJSON inserts
+tools/upload1brc/     streams a measurements file, or an NDJSON file, as idempotent NDJSON inserts
 tools/tsbsrw/         loads a TSBS line-protocol file through Prometheus remote write
 tools/tsbsdigest/     one hash per TSBS answer, to compare builds without moving the JSON
 tools/watch/          CPU and RSS sampler, ps-based, for the server and k6
 k6/insert.js          load script, closed loop (VUS) or open loop (RATE)
-schemas/              smolquery table-create JSON, ClickHouse MergeTree DDL
+schemas/              smolquery table-create JSON, ClickHouse MergeTree DDL, Postgres DDL
 schemas/onebrc_stations.sql  the 413 stations and means, generated from tools/gen1brc
 scripts/              setup, run, sweep, stop, report, watch-pods, watch-metrics, loadgen
+scripts/pg-onebrc.exs the Postgres read-cliff bench: setup, run, report
 scripts/tsbs.exs      TSBS cpu-only against the VictoriaMetrics edge, per smolquery build
+scripts/clickbench/   the 43 ClickBench queries, the scatter probe query, the per-file load pipeline and its status summer
+tools/cbquery/        runs the ClickBench queries from the box against one query pod
+tools/vlogs/          the smolquery adapter for VictoriaMetrics' logs-benchmark, its build script, and the box-side start, stop and sampler scripts
+scripts/clickbench-report.exs  a ClickBench run against the published S3 entries, as markdown
 scripts/report_html.exs  the HTML run report generator
 scripts/report/       its CSS and JS, inlined into every report
 mise.toml             every workflow as a task — `mise tasks`
 results/raw/          k6 and watch JSON per run (gitignored)
 results/raw-remote*/  the same, plus *.pods.json, for the remote arm
 results/raw-loadgen/  the in-region load generator's runs, plus *.metrics.sqlite3 per sweep
+results/raw-pg/       the Postgres read-cliff runs (gitignored)
 results/raw-tsbs/     the TSBS load and query runs (gitignored)
 results/*.md          dated baseline writeups
 results/*.html        one charted report per load test, beside its writeup
@@ -785,10 +1055,14 @@ Adding the column changed the schema, and smolquery answers 409 on a
 | `onebrc_v4` | same | same | the 2026-08-24 48-worker follow-up, ingest only |
 | `onebrc_v5` | same | same | the 2026-08-25 48-worker re-check on `main@18117bb`, with the query phase — exactly 1B rows |
 | `onebrc_v6` | same | same | the 2026-08-26 48-worker re-check on `main@1a6a543` (F-1 and F-2 fixes), with the query phase — exactly 1B rows |
+| `onebrc_v7_w<N>` | same | same | one table per point of the 2026-10-08 worker sweep on 0.20.0 (`main@390f430`), ingest only — each exactly 1B rows |
 | `otel_logs_v34` | same as v3 | clustering `[project_id, timestamp]` | the flat control for the 2026-08-27 attributes bench (T-393): the same 63 columns, fresh |
 | `clickstack_map_v1` | `ORDER BY (project, timestamp)` | clustering `[project, timestamp]` | the ClickStack logs layout, snake_case, plus `project` and `inserted_at`: 15 scalar columns and `resource_attributes`, `scope_attributes`, `log_attributes` as `MAP(STRING, STRING)`; `SHAPE=clickstack` |
 | `clickstack_variant_v1` | same, attributes as `JSON` | same | the same columns with the three attribute bags as `VARIANT` |
 | `clickstack_map_v2`, `clickstack_variant_v2` | same | same | the same schemas, fed the stamped body (`log_attributes['ingest.stamp']` varies per request) — the tables to compare; `_v1` hold the unstamped, dictionary-compressed rows |
+| `hits_v1` | `ORDER BY (CounterID, EventDate, UserID, EventTime, WatchID)` | clustering `[CounterID, EventDate, UserID, EventTime]` | ClickBench's `hits`: 105 columns, integers as `INT64`, text as `STRING`, ~2.3 KB/row as NDJSON; `BENCHES=clickbench`. Any `hits*` table takes this schema and clustering. **Holds the first 10M rows (files 0 to 9) since 2026-10-03** |
+| `hits_v2` | same | same | the full ClickBench `hits`, 99,997,497 rows, loaded 2026-10-03 |
+| `vlogs_v1` | `ORDER BY (app, timestamp)` | clustering `[app, timestamp]` | VictoriaMetrics' logs-benchmark lines: 62 nullable columns (5 core, 3 host, 54 from the field pool), 30-40 set per line, ~930 bytes of JSON; `BENCHES=vlogs`. Holds every 2026-11-05 run, smoke included: 1,708,562,000 rows |
 | `clickstack_map_p64` | `PARTITION BY (project, toDate(timestamp))` | same, `partitions: 64` | the 2026-08-27 pathological table: 64 write partitions and `DAYS=30` timestamps — the nearest smolquery analog of a per-project, per-day partition key |
 
 `otel_logs_v3` is what `TABLE` defaults to. It exists to answer one question:
@@ -805,6 +1079,26 @@ like-for-like. Say which mechanism produced each number.
 collects NULLs in a partition of their own.
 
 ## Reference numbers
+
+VictoriaMetrics' structured-log ingest ramp, 2026-11-05 (`main@4a72dc3`,
+upstream writer, 2,000 lines per request, 32 in flight, 5-minute steps):
+**VictoriaLogs v1.53.0 on one 8-vCPU node stores 141,468 lines/s. smolquery
+as deployed stores 53,874, held by its 1-second group-commit window. Tuned
+to `SMOLQUERY_FLUSH_INTERVAL_MS=100` with api + buffer + storage limited to
+8 cores, it stores 168,760**, with zero errors, zero restarts and sealing
+at parity. The short window costs query-time hot files; the sandbox runs
+1 s on purpose. See `results/2026-11-05-vlogs-structured-ingest.md`.
+
+ClickBench on the full 100M rows, 2026-10-04 (`main@947dfa0`, 8GB job
+engine, 32 threads): **on one c6a.4xlarge query node (`"distributed":
+false`), all 43 pass, 57.6 s hot sum: 0.67x `duckdb-datalake` hot and
+0.52x `clickhouse-datalake` cold** (geomean ratios; under 1 is faster),
+the published entries that also read S3. ClickHouse is 1.97x faster hot.
+Scatter across 3 nodes was slower (103.4 s): the probe measured 1.45 s of
+fixed overhead per scattered query. Load: 99,997,497 rows in 680.8 s,
+146,882 rows/s. See
+`results/2026-10-03-clickbench-100m.md`. The 10M run (old m7i.xlarge query
+tier) is in `results/2026-10-03-clickbench-10m.md`.
 
 TSBS through the VictoriaMetrics edge, 2026-09-24 (`main@f4303d0`, the
 pushdown stack): **every `cpu-only` query type answers at scale 100 in 0.7 to
@@ -830,6 +1124,14 @@ Re-checked again 2026-08-26 on `main@1a6a543` (the F-1 and F-2 replication
 fixes): 9,703,402 rows/s in 103.1 s, 11.30 s aggregate, 78 puts at 188 ms —
 the fixes cost nothing on a clean upload
 ([results/2026-08-26-onebrc-v6-post-f1-f2.md](results/2026-08-26-onebrc-v6-post-f1-f2.md)).
+The worker curve again, 2026-10-08 on 0.20.0 (`main@390f430`), same api and
+buffer shape: **peak 8,821,698 rows/s at 48 workers**, flat within 3% from 32
+to 128, 7–12% below 0.16.0 at every point. The commit's `encode` phase
+costs 10% more per row, cause open; the leads are deploy changes
+(`MALLOC_ARENA_MAX=2` on buffer and storage, the cluster's own metrics and
+logs now ingested on the same cores), not code. The 429 reset bug is
+fixed: 5,643 refusals, zero other retries
+([results/2026-10-08-onebrc-ingest-0.20.md](results/2026-10-08-onebrc-ingest-0.20.md)).
 
 Attribute bags, 2026-08-27 (T-393, `main@43f1b30`): **`MAP(STRING, STRING)`
 is the type to recommend.** With per-row unique values in the bag, every

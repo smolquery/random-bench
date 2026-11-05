@@ -7,7 +7,9 @@
 // from the AUTH environment variable, never from the command line. Past
 // -deadline the reader cuts no more batches and a failing batch is not
 // retried, so a collapsed cluster costs a bounded amount of time; the summary
-// then carries stopped_early: true.
+// then carries stopped_early: true. With -format ndjson the file already
+// holds one JSON object per line, so lines go out as they are and -row-bytes
+// sets how many bytes a batch of -rows lines is cut at.
 package main
 
 import (
@@ -32,7 +34,6 @@ import (
 )
 
 const (
-	bytesPerRow   = 14
 	maxAttempts   = 30
 	progressEvery = 5 * time.Second
 )
@@ -87,6 +88,14 @@ func (s *stats) recordLatency(ms float64) {
 type insertResponse struct {
 	InsertedRows int64 `json:"insertedRows"`
 	ErrorCount   int64 `json:"errorCount"`
+}
+
+func countLines(raw []byte) int64 {
+	rows := int64(bytes.Count(raw, []byte{'\n'}))
+	if len(raw) > 0 && raw[len(raw)-1] != '\n' {
+		rows++
+	}
+	return rows
 }
 
 func convert(raw []byte) ([]byte, int64) {
@@ -206,9 +215,15 @@ func post(client *http.Client, url string, body []byte, auth string) (int, inser
 	return res.StatusCode, parsed, elapsed, nil
 }
 
-func work(client *http.Client, urls []string, auth, prefix string, deadline time.Time, jobs <-chan batch, st *stats) {
+func work(client *http.Client, urls []string, auth, prefix string, ndjson bool, deadline time.Time, jobs <-chan batch, st *stats) {
 	for b := range jobs {
-		body, rows := convert(b.raw)
+		var body []byte
+		var rows int64
+		if ndjson {
+			body, rows = b.raw, countLines(b.raw)
+		} else {
+			body, rows = convert(b.raw)
+		}
 		url := fmt.Sprintf("%s?insertId=%s-%d", urls[b.index%len(urls)], prefix, b.index)
 		backoff := time.Second
 		done := false
@@ -351,7 +366,9 @@ func writeJSON(path string, value any) {
 }
 
 func main() {
-	file := flag.String("file", "measurements.txt", "the station;temperature file")
+	file := flag.String("file", "measurements.txt", "the station;temperature file, or an NDJSON file with -format ndjson")
+	format := flag.String("format", "1brc", "input format: 1brc (station;temperature lines) or ndjson")
+	rowBytes := flag.Int("row-bytes", 14, "average input bytes per row, to cut batches of about -rows rows")
 	urlList := flag.String("urls", "", "comma-separated insert URLs (required)")
 	rows := flag.Int("rows", 200_000, "target rows per request")
 	workers := flag.Int("workers", 8, "concurrent requests")
@@ -369,6 +386,9 @@ func main() {
 	}
 	if *urlList == "" || len(urls) == 0 {
 		log.Fatal("-urls is required")
+	}
+	if *format != "1brc" && *format != "ndjson" {
+		log.Fatalf("-format must be 1brc or ndjson, got %q", *format)
 	}
 	if *prefix == "" {
 		*prefix = fmt.Sprintf("onebrc-%d", time.Now().Unix())
@@ -395,6 +415,7 @@ func main() {
 	st := &stats{statuses: map[int]int64{}}
 	cfg := map[string]any{
 		"file":                    *file,
+		"format":                  *format,
 		"urls":                    urls,
 		"targets":                 len(urls),
 		"workers":                 *workers,
@@ -409,14 +430,14 @@ func main() {
 	if *deadline > 0 {
 		deadlineAt = start.Add(*deadline)
 	}
-	go readBatches(*file, *rows*bytesPerRow, *maxRows, deadlineAt, jobs, st)
+	go readBatches(*file, *rows**rowBytes, *maxRows, deadlineAt, jobs, st)
 
 	var wg sync.WaitGroup
 	for i := 0; i < *workers; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			work(client, urls, auth, *prefix, deadlineAt, jobs, st)
+			work(client, urls, auth, *prefix, *format == "ndjson", deadlineAt, jobs, st)
 		}()
 	}
 	finished := make(chan struct{})
