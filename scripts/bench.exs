@@ -41,6 +41,8 @@ defmodule Bench do
   `[project_id, inserted_at]`. Every older table uses `[project_id, timestamp]`.
   A `hits*` table (ClickBench) clusters by ClickHouse's ClickBench sort key
   without `WatchID`: `[CounterID, EventDate, UserID, EventTime]`.
+  A `vlogs*` table (VictoriaMetrics' logs-benchmark) clusters by
+  `[app, timestamp]`, the stream key and time.
   `CLUSTERING` overrides both, as a comma-separated column list; an empty value
   clears clustering.
   """
@@ -56,6 +58,7 @@ defmodule Bench do
   defp default_clustering("otel_logs_v3"), do: ["project_id"]
   defp default_clustering("otel_logs_v34"), do: ["project_id", "timestamp"]
   defp default_clustering("clickstack" <> _), do: ["project", "timestamp"]
+  defp default_clustering("vlogs" <> _), do: ["app", "timestamp"]
   defp default_clustering("otel_logs_v4"), do: ["project_id", "timestamp"]
   defp default_clustering("otel_logs_v5"), do: ["project_id", "inserted_at"]
   defp default_clustering("otel_logs_v6"), do: ["project_id", "inserted_at"]
@@ -91,7 +94,7 @@ defmodule Bench do
   defp default_clustering("hits" <> _), do: ["CounterID", "EventDate", "UserID", "EventTime"]
   defp default_clustering(_table), do: ["project_id", "timestamp"]
 
-  @bench_types ~w(ingest attrs tail pruning compaction onebrc tsbs clickbench)
+  @bench_types ~w(ingest attrs tail pruning compaction onebrc tsbs clickbench vlogs)
 
   @doc """
   The bench types to run, from `BENCHES`, as a comma-separated list.

@@ -191,6 +191,21 @@ large enough for whatever a claim contains.
   duplication and is not. Read `hot` and `sealed` separately, and get a
   true total from `SELECT count(*)`.
 
+- **A closed-loop client's ceiling can be the flush window, not the
+  cluster.** With `SMOLQUERY_COMMIT_SIBLINGS=0` every insert waits out
+  `flush_interval_ms` (1,000 deployed) before its 200. At 32 in flight and
+  2,000-line requests that is ~53k lines/s on an idle cluster. Check
+  `smolquery_buffer_flush_trigger_total{reason}` and the commit phase
+  counters before you blame CPU (2026-11-05 vlogs write-up).
+- **A pod CPU limit changes the buffer's shape.** Under a quota below 2
+  cores the pod sees one BEAM scheduler, and the buffer derives
+  `write_pool_size=1 encode_concurrency=1` (`buffer_service/runtime.ex:81`).
+  Read the boot log after any limit change.
+- **A partitioned table writes sealed files under `<table>__p1/`,
+  `<table>__p2/`, … as well as `<table>/`.** An S3 size of one prefix
+  undercounts. Compacted-away objects stay until GC, so a full listing
+  overcounts. The plan's `fileBytes` is the live inventory.
+
 ## Workflow
 
 - Plans live in `.plans/`, one file per effort, named

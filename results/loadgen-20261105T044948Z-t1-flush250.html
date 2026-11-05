@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>loadgen-20261105T044948Z-t1-flush250</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+:root {
+  color-scheme: light;
+  --plane: #f2f5f8;
+  --surface: #fbfcfd;
+  --surface-2: #f6f8fa;
+  --ink: #0d1117;
+  --ink-2: #4a535f;
+  --ink-3: #828b96;
+  --rule: rgba(13, 17, 23, 0.11);
+  --grid: #e4e8ec;
+  --axis: #c6cdd5;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --s5: #e87ba4; --s6: #008300; --s7: #4a3aa7; --s8: #e34948;
+  --good: #0ca30c; --warn: #fab219; --crit: #d03b3b;
+  --good-ink: #076b07; --crit-ink: #b02c2c;
+  --void: rgba(13, 17, 23, 0.055);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --plane: #0b0d10;
+    --surface: #14171b;
+    --surface-2: #191d22;
+    --ink: #eef1f5;
+    --ink-2: #aeb7c2;
+    --ink-3: #7b838e;
+    --rule: rgba(238, 241, 245, 0.13);
+    --grid: #232830;
+    --axis: #333a44;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+    --good: #0ca30c; --warn: #fab219; --crit: #d03b3b;
+    --good-ink: #2fbf2f; --crit-ink: #e46161;
+    --void: rgba(238, 241, 245, 0.06);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --plane: #0b0d10;
+  --surface: #14171b;
+  --surface-2: #191d22;
+  --ink: #eef1f5;
+  --ink-2: #aeb7c2;
+  --ink-3: #7b838e;
+  --rule: rgba(238, 241, 245, 0.13);
+  --grid: #232830;
+  --axis: #333a44;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --s5: #d55181; --s6: #008300; --s7: #9085e9; --s8: #e66767;
+  --good: #0ca30c; --warn: #fab219; --crit: #d03b3b;
+  --good-ink: #2fbf2f; --crit-ink: #e46161;
+  --void: rgba(238, 241, 245, 0.06);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--plane);
+  color: var(--ink);
+  font: 400 15px/1.6 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 40px 24px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+h1, h2, h3 {
+  font-family: "IBM Plex Sans Condensed", "IBM Plex Sans", system-ui, sans-serif;
+  margin: 0;
+  text-wrap: balance;
+}
+h1 { font-size: 38px; font-weight: 700; letter-spacing: -0.015em; line-height: 1.1; }
+h2 { font-size: 23px; font-weight: 600; letter-spacing: -0.005em; }
+h3 { font-size: 16px; font-weight: 600; }
+p { margin: 0; max-width: 68ch; color: var(--ink-2); }
+p strong { color: var(--ink); font-weight: 600; }
+
+.eyebrow {
+  font: 500 11px/1 "IBM Plex Mono", ui-monospace, monospace;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+header { display: flex; flex-direction: column; gap: 16px; }
+.runbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 28px;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding: 12px 0;
+  font: 400 12.5px/1.7 "IBM Plex Mono", ui-monospace, monospace;
+  color: var(--ink-2);
+}
+.runbar b { color: var(--ink-3); font-weight: 500; }
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+}
+.tile { background: var(--surface); padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 6px; }
+.tile .k {
+  font: 500 11px/1 "IBM Plex Mono", monospace;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.tile .v {
+  font-family: "IBM Plex Sans Condensed", sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+.tile .v small { font-size: 16px; font-weight: 600; color: var(--ink-2); letter-spacing: 0; }
+.tile .n { font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+
+section { display: flex; flex-direction: column; gap: 18px; }
+.shead { display: flex; flex-direction: column; gap: 7px; }
+
+.panel { background: var(--surface); border: 1px solid var(--rule); }
+.panel-hd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px 20px;
+  padding: 14px 18px 0;
+}
+.panel-hd h3 { font-size: 15px; }
+.panel-hd .unit {
+  font: 400 11.5px/1 "IBM Plex Mono", monospace;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+}
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 10px 18px 0; }
+.lg { display: inline-flex; align-items: center; gap: 7px; font: 400 12.5px/1 "IBM Plex Sans", sans-serif; color: var(--ink-2); }
+.lg i { width: 11px; height: 11px; border-radius: 2px; flex: none; }
+.lg i.ln { height: 3px; border-radius: 2px; width: 14px; }
+.plot { padding: 4px 6px 6px; }
+.plot svg { display: block; width: 100%; height: auto; }
+.pnote { padding: 4px 18px 15px; font-size: 12.5px; line-height: 1.5; color: var(--ink-3); max-width: 82ch; }
+.empty { padding: 22px 18px 26px; font: 400 13px/1.5 "IBM Plex Mono", monospace; color: var(--ink-3); }
+
+.duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 18px; }
+
+.callout {
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--s2);
+  background: var(--surface);
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.callout.crit { border-left-color: var(--crit); }
+.callout .k {
+  font: 500 11px/1 "IBM Plex Mono", monospace;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.callout p { font-size: 14px; }
+
+.tw { overflow-x: auto; border: 1px solid var(--rule); background: var(--surface); }
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font: 400 13px/1.5 "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+th, td { padding: 7px 13px; text-align: right; border-bottom: 1px solid var(--grid); }
+th {
+  font-weight: 500;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-size: 11px;
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+}
+td:first-child, th:first-child { text-align: left; }
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover td { background: var(--surface-2); }
+td.dim { color: var(--ink-3); }
+td.wrap-cell { white-space: normal; max-width: 52ch; }
+.grp td {
+  background: var(--surface-2);
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: 0.06em;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.pill { display: inline-block; padding: 1px 8px 2px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+.pill.pass { color: var(--good-ink); background: color-mix(in srgb, var(--good) 15%, transparent); }
+.pill.fail { color: var(--crit-ink); background: color-mix(in srgb, var(--crit) 15%, transparent); }
+
+#tt {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s linear;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.16);
+  padding: 9px 12px;
+  min-width: 172px;
+  font: 400 12.5px/1.55 "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+#tt .t { font-weight: 600; letter-spacing: 0.05em; color: var(--ink-3); font-size: 11px; text-transform: uppercase; margin-bottom: 5px; }
+#tt .r { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+#tt .r span:first-child { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
+#tt .r i { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+#tt .r b { font-weight: 600; }
+
+footer { border-top: 1px solid var(--rule); padding-top: 20px; display: flex; flex-direction: column; gap: 10px; }
+footer p { font-size: 13px; color: var(--ink-3); max-width: 92ch; }
+
+:focus-visible { outline: 2px solid var(--s1); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+@media (max-width: 640px) {
+  h1 { font-size: 29px; }
+  .wrap { padding: 28px 16px 56px; gap: 30px; }
+}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">smolquery load test · pod counters</div>
+    <h1>loadgen-20261105T044948Z-t1-flush250</h1>
+    <p>Every counter on every pod, sampled every 14&nbsp;s and bucketed to 60&nbsp;s. Hover any chart to read one bucket across the run.</p>
+    <div class="runbar">
+      <span><b>window</b> 2026-11-05T04:49:49Z &rarr; 2026-11-05T05:14:23Z (24 min)</span>
+      <span><b>samples</b> 229,074 across 12 pod(s)</span>
+      <span><b>buckets</b> 26 &times; 60s</span>
+      <span><b>gap cut</b> 90s</span>
+    </div>
+  </header>
+  <div class="tiles">
+      <div class="tile"><div class="k">Peak accepted</div><div class="v">136,762<small> rows/s</small></div><div class="n">Best single 60s bucket of the run.</div></div>
+      <div class="tile"><div class="k">Rows accepted</div><div class="v">106k<small></small></div><div class="n">Over 24 min of sampling.</div></div>
+      <div class="tile"><div class="k">Failed requests</div><div class="v">0.0<small>%</small></div><div class="n">0 5xx against 106,457 2xx and 0 4xx.</div></div>
+      <div class="tile"><div class="k">Counter resets</div><div class="v">1131<small></small></div><div class="n">Scrapes where a counter fell across 12 pod(s) — each is a restart.</div></div>
+  </div>
+  <div id="sections"></div>
+  <footer>
+    <p class="mono">method</p>
+    <p>Counters are node-local and monotonic. Each pod's series is differenced between consecutive scrapes. An interval whose value falls is a pod restart and leaves every ratio it touches. An interval longer than 90&nbsp;s is a missed scrape and leaves every series. Per-operation figures divide the summed time delta by the summed operation delta over the same intervals, so a slow pod carries its own weight; buckets under 20 operations are dropped. Rates sum per-pod rates rather than dividing a tier delta by a wall clock.</p>
+    <p class="mono">write_partitions=3,schema_cache_ttl_ms=60000</p>
+    <p class="mono">compression=zstd,flush_max_bytes=94000000,flush_interval_ms=250,flush_idle_interval_ms=300,commit_siblings=0,encode_concurrency=1,encode_transient_bytes=282000000,write_pool_size=1,write_engine_threads=1,write_engine_memory_limit=512MB,seal_max_bytes=25165824,seal_max_files=64,claim_valve_factor=1,claim_max_bytes=25165824,claim_max_files=64,backlog_max_entries=279620,backlog_max_bytes=,max_live_claims=8,transport_tls=false</p>
+    <p class="mono">store=Smolquery.Segments.Store.S3,compression=zstd,seal_row_group_size=100000,seal_row_group_bytes=unset,seal_data_page_bytes=unset,max_concurrent_seals=4,seal_backoff_base_ms=30000,seal_backoff_max_ms=600000,merge_engine_memory_limit=3584MiB,compact_engine_memory_limit=1536MiB,compact_engine_threads=1,merge_inputs_per_call=12,merge_copy_timeout_ms=300000,merge_staging_timeout_ms=120000,merge_describe_timeout_ms=120000</p>
+  </footer>
+</div>
+<div id="tt" role="status" aria-live="off"></div>
+<script>
+const D = {"liveness":[{"total":3,"tier":"api","counts":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},{"total":3,"tier":"buffer","counts":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},{"total":3,"tier":"storage","counts":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]},{"total":3,"tier":"pods","counts":[3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3]}],"series":{"req_4xx":[null,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"snapshots_expired":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"commit_accumulate_ms":[null,251.884,252.055,251.879,252.099,252.053,252.127,252.539,252.391,252.67,252.927,254.092,253.435,253.227,253.434,253.33,253.827,252.999,253.193,252.901,253.038,253.231,252.361,252.057,252.084,251.905],"rss_storage_min_mb":[624.0,949.3,719.3,811.1,647.5,657.8,699.9,741.6,749.0,760.7,1066.6,794.7,845.6,2403.1,2271.1,1617.9,889.3,1457.6,867.6,965.2,1880.2,1164.2,2153.5,1782.9,2024.9,2270.8],"gc_segments":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"bc_compaction":[null,2.0,8.0,4.0,11.0,3.0,2.0,8.0,2.0,7.0,4.0,4.0,5.0,1.0,4.0,1.0,1.0,6.0,3.0,4.0,5.0,6.0,8.0,5.0,5.0,0.0],"hotread_retired_before_us":[null,9.377,9.964,8.884,9.551,9.542,9.223,9.487,9.136,9.546,9.098,9.025,9.657,11.421,9.863,9.034,9.003,9.961,8.556,9.525,9.023,8.31,8.51,8.501,8.849,8.582],"cpu_api_pct":[null,3.4,4.5,4.5,5.1,5.4,5.6,6.1,6.3,6.6,7.2,7.5,7.4,8.0,8.4,8.3,8.7,8.5,8.5,8.5,8.5,8.7,8.5,8.8,7.5,1.8],"rss_buffer_min_mb":[383.9,573.0,743.7,860.1,1009.7,1248.8,1428.1,1676.7,1872.6,2163.2,2439.1,2582.1,2709.7,2437.2,2329.1,2451.6,2581.1,2564.4,2647.0,2664.9,2945.6,3189.0,3246.8,3394.1,3367.9,3331.7],"rss_api_min_mb":[225.7,251.3,250.9,256.2,254.8,246.2,252.0,249.4,255.4,256.5,257.9,251.7,253.7,257.0,265.8,260.8,265.1,264.5,262.8,261.3,266.4,262.6,266.0,263.3,235.4,234.8],"seal_segs_err":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"rss_api_max_mb":[238.3,262.2,263.2,264.8,270.8,265.6,272.6,264.0,267.7,267.8,275.6,273.1,268.3,269.5,274.9,275.1,273.2,273.9,274.5,277.1,274.5,275.2,276.3,268.5,246.9,245.1],"rss_buffer_max_mb":[401.7,624.8,813.1,900.3,1031.8,1291.8,1504.8,1715.1,1941.6,2224.6,2464.2,2676.6,2808.7,3035.7,3204.0,3268.1,3454.4,3577.5,3653.9,3697.5,3854.0,4018.1,3871.1,3812.7,3748.3,3632.9],"hot_segment_ms":[null,1.755,2.776,1.88,2.753,2.475,1.912,2.317,3.909,3.503,4.755,6.422,6.091,7.512,10.23,8.249,8.603,6.728,6.392,5.878,6.975,7.062,4.884,5.363,6.322,5.08],"hot_manifest_reqs":[null,27.0,36.0,36.0,36.0,36.0,36.0,45.0,27.0,36.0,36.0,36.0,36.0,36.0,36.0,37.0,35.0,36.0,36.0,36.0,36.0,36.0,36.0,36.0,36.0,18.0],"rss_api_limit_mb":[3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0,3072.0],"compact_s":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"commits":[null,982.0,1451.0,1130.0,1186.0,1216.0,1151.0,1489.0,1147.0,1210.0,1225.0,1.2e3,1182.0,1272.0,1240.0,1544.0,1095.0,980.0,1138.0,1038.0,987.0,1094.0,1327.0,1114.0,991.0,350.0],"commit_manifest_ms":[null,3.442,3.645,3.585,3.703,3.719,3.79,3.833,3.855,4.001,4.111,4.182,4.245,4.48,4.494,4.458,4.439,4.352,4.39,4.258,4.101,4.245,4.111,4.128,4.181,3.291],"hot_manifest_scoped_entries":[null,33.514,44.811,42.851,37.714,43.449,39.362,40.238,38.041,50.949,40.174,36.677,38.508,33.763,35.657,32.286,33.015,26.313,29.644,30.662,27.2,28.725,30.667,29.878,27.765,31.923],"hotread_entries_us":[null,6034.882,8088.968,9633.454,11928.989,14576.481,17545.106,25760.087,29291.811,33474.269,38376.129,40771.376,43924.185,43413.81,45405.685,45299.053,44166.49,42636.206,39047.038,38886.93,40322.278,39817.045,34657.27,25560.639,26688.459,22473.278],"seal_segments_ok":[null,516.0,1194.0,975.0,1020.0,1037.0,898.0,1298.0,909.0,2495.0,1376.0,1173.0,1155.0,953.0,1217.0,1302.0,1220.0,1062.0,1092.0,1.1e3,955.0,992.0,1458.0,1105.0,965.0,302.0],"inserts":[null,2051.0,3326.0,2621.0,3052.0,3284.0,3164.0,4525.0,3665.0,3862.0,4234.0,4410.0,4386.0,4863.0,5176.0,6318.0,5059.0,4979.0,5295.0,5036.0,5044.0,5160.0,6437.0,5233.0,4603.0,635.0],"hotread_entries_n":[null,211.0,406.0,302.0,279.0,268.0,246.0,286.0,196.0,186.0,178.0,170.0,162.0,158.0,162.0,189.0,151.0,155.0,159.0,158.0,158.0,157.0,63.0,36.0,37.0,18.0],"hotread_claimable_n":[null,5963.0,7774.0,6249.0,6274.0,6344.0,6311.0,7992.0,6234.0,6286.0,6433.0,6384.0,6415.0,6564.0,6645.0,8061.0,6148.0,5942.0,6331.0,5989.0,6032.0,6229.0,7572.0,6189.0,6055.0,2686.0],"compactions_err":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"compact_replaced":[null,5.0,45.0,24.0,33.0,12.0,6.0,42.0,14.0,27.0,16.0,18.0,19.0,2.0,19.0,3.0,2.0,82.0,14.0,69.0,25.0,23.0,32.0,32.0,21.0,0.0],"hotread_retired_before_n":[null,10433.0,13208.0,10682.0,10623.0,10693.0,10776.0,13557.0,10617.0,10649.0,10838.0,10788.0,10908.0,10993.0,11247.0,13588.0,10623.0,10341.0,10813.0,10321.0,10516.0,10694.0,13026.0,10577.0,10597.0,4921.0],"req_2xx":[null,2055.0,3332.0,2627.0,3056.0,3287.0,3168.0,4522.0,3664.0,3862.0,4234.0,4410.0,4386.0,4861.0,5180.0,6319.0,5064.0,4983.0,5298.0,5035.0,5046.0,5155.0,6435.0,5236.0,4608.0,634.0],"parse_ms":[null,0.2,0.281,0.28,0.327,0.352,0.359,0.426,0.469,0.451,0.515,0.508,0.513,0.542,0.586,0.589,0.901,1.147,1.097,1.143,1.084,1.098,1.1,1.141,1.116,0.007],"hot_segment_kb":[null,87.771,109.575,114.115,125.569,142.295,151.733,157.874,173.486,94.091,168.99,201.717,215.265,243.925,262.553,258.004,283.163,298.491,285.493,279.501,298.112,306.516,268.842,295.997,318.959,244.469],"hot_manifest_scoped_reqs":[null,35.0,53.0,47.0,49.0,49.0,47.0,63.0,49.0,98.0,69.0,65.0,61.0,59.0,67.0,84.0,66.0,80.0,73.0,71.0,75.0,69.0,93.0,74.0,68.0,26.0],"rss_storage_limit_mb":[6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0,6144.0],"gc_staged":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"commits_err":[null,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"hot_manifest_ms":[null,17.367,25.347,25.674,33.78,40.185,56.638,62.948,85.877,99.611,130.26,153.464,176.319,149.254,167.815,166.291,177.642,164.376,126.093,133.377,134.425,137.915,135.822,135.905,117.672,90.44],"rows_committed_s":[null,28825.8,50139.1,51168.9,63989.2,70181.0,71177.1,84584.7,89107.8,91064.4,103422.9,111511.0,109165.4,121306.2,133463.4,128515.1,136095.1,133070.2,133781.7,132288.8,131915.2,135921.7,131999.8,136210.0,114138.1,549.6],"seal_segments_err":[null,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"cpu_buffer_pct":[null,24.9,38.0,37.7,43.9,47.9,48.8,55.6,57.1,62.0,65.7,68.5,67.5,73.5,78.0,74.3,76.7,71.7,73.0,71.4,71.7,73.2,62.7,64.8,55.0,12.9],"rows_accepted_s":[null,28825.9,50224.0,51029.1,64162.1,70077.6,71212.1,84668.2,88969.5,90924.1,103598.4,111373.0,109165.3,121513.6,132886.9,128569.0,136761.8,132794.1,133919.9,131426.6,133501.6,135043.8,132270.6,135863.9,114137.8,549.0],"commit_encode_ms":[null,30.003,41.206,39.791,47.801,51.716,51.846,60.177,66.087,68.239,78.447,83.073,86.239,91.58,103.867,97.666,115.148,126.816,118.996,119.864,128.27,121.501,114.66,113.141,106.149,13.772],"unattributed_ms":[null,192.4,192.9,193.8,192.3,191.5,194.6,195.5,197.6,199.7,198.9,198.3,196.9,203.6,204.6,205.6,239.0,274.2,273.9,276.9,272.8,274.3,277.2,279.1,284.1,191.4],"hot_range_responses":[null,1840.0,3520.0,3027.0,2637.0,3213.0,2855.0,3574.0,2722.0,6085.0,4198.0,3972.0,4085.0,4057.0,4683.0,5065.0,4286.0,3767.0,3748.0,3745.0,3697.0,3629.0,4656.0,3966.0,3671.0,1537.0],"commit_ms":[null,42.574,55.16,53.63,62.247,66.622,66.993,75.978,82.398,85.686,97.33,103.863,107.843,112.776,127.019,118.747,137.52,147.611,139.631,139.509,149.326,142.599,131.609,129.512,122.966,25.594],"compact_segs":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"hotread_claimable_entries":[null,11.899,14.405,13.798,13.92,14.1,13.208,12.879,12.425,12.157,10.383,9.559,9.356,10.025,9.252,9.532,8.261,7.364,9.242,8.349,7.508,8.774,8.428,8.799,8.153,8.546],"hot_segment_entries":[null,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"seal_attempts_ok":[null,16.0,27.0,23.0,26.0,24.0,23.0,32.0,24.0,49.0,34.0,32.0,30.0,28.0,34.0,41.0,36.0,40.0,37.0,36.0,33.0,37.0,47.0,37.0,35.0,10.0],"seal_attempts_err":[null,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"write_ms":[null,235.011,248.096,247.444,254.544,258.147,261.562,271.465,279.958,285.433,296.252,302.156,304.771,316.352,331.665,324.357,376.565,421.815,413.504,416.408,422.129,416.896,408.814,408.622,407.037,216.957],"req_5xx":[null,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"rows_refused_s":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"hot_manifest_kb":[null,316.283,405.655,510.828,618.479,737.166,857.33,999.535,1154.014,1302.921,1474.223,1648.588,1717.905,1729.098,1743.279,1718.62,1820.576,1720.571,1674.016,1622.044,1583.573,1532.741,1483.798,1447.133,1404.377,1323.219],"rss_storage_max_mb":[1985.9,1985.4,2150.1,1200.9,1555.5,2597.3,1549.7,4237.8,4971.0,2654.1,2939.6,2738.3,2620.7,5583.8,6143.8,5793.2,5657.1,6099.3,5816.0,3315.1,4226.0,2944.6,3522.6,4293.0,3959.0,3825.0],"commit_queue_ms":[null,0.511,0.622,0.624,0.675,0.707,0.745,0.802,0.861,0.921,1.201,1.155,1.552,1.475,2.251,1.374,2.013,1.187,1.363,1.048,1.149,1.105,0.909,0.877,0.887,0.624],"hotindex_reap_lag":[null,20.0,1032.0,1149.0,1191.0,1096.0,768.0,1492.0,1266.0,4327.0,2077.0,1323.0,340.0,-148.0,516.0,-140.0,556.0,198.0,177.0,-2426.0,-1046.0,-482.0,192.0,58.0,-466.0,-364.0],"seal_ok_s":[null,0.947,5.993,2.736,3.265,4.078,4.35,3.993,4.674,3.711,5.271,7.435,10.195,12.722,15.919,12.097,8.229,5.256,3.106,2.975,3.725,4.219,5.096,5.932,7.844,3.362],"hotread_entries_entries":[null,330.943,438.35,557.556,666.143,785.828,899.764,1045.115,1218.418,1372.871,1518.691,1701.512,1771.901,1780.278,1805.92,1824.069,1822.464,1764.323,1688.604,1656.544,1626.563,1582.732,1352.349,1076.361,1019.622,983.889],"hot_segment_reqs":[null,2873.0,5559.0,4750.0,4.1e3,5025.0,4451.0,5479.0,4229.0,9341.0,6652.0,6396.0,6663.0,6793.0,7848.0,8457.0,7233.0,6290.0,6219.0,6211.0,6165.0,6070.0,7646.0,6631.0,6203.0,2631.0],"jobs_done":[null,4.0,4.0,4.0,4.0,4.0,4.0,5.0,3.0,4.0,4.0,4.0,4.0,3.0,4.0,5.0,4.0,4.0,4.0,4.0,4.0,3.0,5.0,4.0,4.0,2.0],"bc_seal":[null,16.0,27.0,23.0,26.0,24.0,23.0,32.0,24.0,49.0,34.0,32.0,30.0,28.0,34.0,41.0,36.0,40.0,37.0,36.0,33.0,37.0,47.0,37.0,35.0,10.0],"commit_replicate_ms":[null,9.129,10.309,10.254,10.743,11.188,11.357,11.969,12.457,13.447,14.772,16.608,17.359,16.716,18.659,16.623,17.933,16.443,16.245,15.386,16.956,16.853,12.839,12.242,12.635,8.531],"hotread_retired_before_entries":[null,0.056,0.052,0.046,0.046,0.048,0.052,0.045,0.032,0.045,0.029,0.052,0.099,0.097,0.092,0.103,0.096,0.099,0.102,0.232,0.152,0.115,0.109,0.111,0.137,0.138],"compactions_ok":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"rss_buffer_limit_mb":[8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0,8192.0],"hotread_claimable_us":[null,168.875,237.218,242.098,272.895,294.44,343.928,431.066,461.518,524.479,551.305,576.905,595.513,639.225,616.794,621.164,588.828,504.928,482.888,465.821,450.641,463.114,401.707,416.305,382.66,255.75],"wire_remote_ms":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"hotindex_seal_lag":[null,937.0,582.0,242.0,329.0,362.0,504.0,380.0,479.0,-2474.0,-263.0,15.0,53.0,640.0,45.0,487.0,-252.0,-165.0,92.0,-125.0,45.0,225.0,-261.0,17.0,52.0,95.0],"hotindex_reaped":[null,1012.0,1292.0,865.0,849.0,978.0,1028.0,1104.0,552.0,663.0,636.0,1062.0,1970.0,2054.0,1918.0,2744.0,1884.0,1926.0,2007.0,4626.0,2976.0,2446.0,2724.0,2152.0,2396.0,968.0],"jobs_cancelled":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"seal_err_s":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"bc_commit":[null,982.0,1451.0,1130.0,1186.0,1216.0,1151.0,1489.0,1147.0,1210.0,1225.0,1.2e3,1182.0,1272.0,1240.0,1544.0,1095.0,980.0,1138.0,1038.0,987.0,1094.0,1327.0,1114.0,991.0,350.0],"hot_manifest_entries":[null,235.778,302.833,381.0,461.111,549.333,638.611,744.422,859.407,970.222,1097.5,1227.111,1278.694,1287.111,1297.722,1279.189,1354.914,1280.111,1245.389,1206.639,1177.972,1140.167,1103.722,1076.361,1044.556,983.889],"hotindex_retired":[null,1032.0,2324.0,2014.0,2040.0,2074.0,1796.0,2596.0,1818.0,4990.0,2713.0,2385.0,2310.0,1906.0,2434.0,2604.0,2440.0,2124.0,2184.0,2.2e3,1930.0,1964.0,2916.0,2210.0,1930.0,604.0],"api_request_ms":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"jobs_error":[null,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"cpu_storage_pct":[null,52.9,58.6,23.7,37.7,44.3,45.3,51.3,55.7,61.4,62.5,65.9,63.7,74.2,76.4,67.5,66.3,52.8,49.0,46.9,50.8,49.5,54.0,64.2,66.2,69.2],"seal_segs_ok":[null,32.25,44.222,42.391,39.231,43.208,39.043,40.563,37.875,50.918,40.471,36.656,38.5,34.036,35.794,31.756,33.889,26.55,29.514,30.556,28.939,26.811,31.021,29.865,27.571,30.2],"query_ms":[null,898.5,1477.25,1459.0,1506.0,1441.5,1544.75,1552.2,1748.333,1766.0,1937.75,2157.5,2200.5,2538.333,2774.5,2579.8,2756.5,2488.75,3236.0,2499.0,5327.25,4053.0,2338.4,4344.25,3719.0,2149.5],"hotindex_resident":[null,957.0,1614.0,1391.0,1520.0,1458.0,1272.0,1872.0,1745.0,1853.0,1814.0,1338.0,393.0,492.0,561.0,347.0,304.0,33.0,269.0,-2551.0,-1001.0,-257.0,-69.0,75.0,-414.0,-269.0],"hotindex_added":[null,1969.0,2906.0,2256.0,2369.0,2436.0,2.3e3,2976.0,2297.0,2516.0,2450.0,2.4e3,2363.0,2546.0,2479.0,3091.0,2188.0,1959.0,2276.0,2075.0,1975.0,2189.0,2655.0,2227.0,1982.0,699.0],"hot_manifest_scoped_ms":[null,0.949,1.565,1.627,1.074,1.379,1.513,2.06,3.497,2.917,1.795,1.58,2.193,1.809,3.963,4.022,2.776,1.579,0.884,1.135,1.223,1.549,1.906,1.007,1.182,2.03],"hotindex_recovered":[null,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0],"wire_local_ms":[null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null],"hot_manifest_scoped_kb":[null,24.869,43.07,41.204,35.922,41.753,39.925,39.732,38.636,36.918,35.424,32.945,36.212,31.377,33.242,31.096,30.736,22.482,24.81,25.097,23.09,24.487,25.05,24.536,23.683,29.097]},"phases":[null,"vlogs","vlogs-50000","vlogs-50000","vlogs-50000","vlogs-70000","vlogs-70000","vlogs-70000","vlogs-90000","vlogs-90000","vlogs-90000","vlogs-110000","vlogs-110000","vlogs-110000","vlogs-110000","vlogs-130000","vlogs-130000","vlogs-130000","vlogs-150000","vlogs-150000","vlogs-150000","vlogs-150000","vlogs-170000","vlogs-170000","vlogs-170000","vlogs-settle"],"buckets":["04:49","04:50","04:51","04:52","04:53","04:54","04:55","04:56","04:57","04:58","04:59","05:00","05:01","05:02","05:03","05:04","05:05","05:06","05:07","05:08","05:09","05:10","05:11","05:12","05:13","05:14"],"voids":[0],"resetMinutes":["04:50","04:51","04:52","04:53","04:54","04:55","04:56","04:57","04:58","04:59","05:00","05:01","05:02","05:03","05:04","05:05","05:06","05:07","05:08","05:09","05:10","05:11","05:12","05:13","05:14"],"sections":[{"id":"throughput","blocks":[{"unit":"rows per second · summed over pods","title":"Row throughput","kind":"panel","chart":{"type":"line","h":210,"series":[{"name":"accepted","c":"s1","key":"rows_accepted_s"},{"name":"committed","c":"s2","key":"rows_committed_s"},{"name":"refused by admission","c":"s3","key":"rows_refused_s"}],"fmt":"rows"},"note":"A shaded bucket is one the sampler never covered. A dash in the table is the same thing, or a bucket dropped for a counter reset or too few operations."},{"unit":"requests per bucket · stacked","title":"API responses","kind":"panel","chart":{"type":"sbars","h":200,"series":[{"name":"2xx accepted","c":"good","key":"req_2xx"},{"name":"4xx refused","c":"warn","key":"req_4xx"},{"name":"5xx failed","c":"crit","key":"req_5xx"}],"fmt":"req"},"note":"A 4xx is admission control shedding load on purpose. A 5xx is the tier failing. A run that fails without refusing is the shape to look for."},{"unit":"per bucket · a triangle marks a counter reset","title":"Pods answering a scrape","kind":"strip","note":"A counter that falls between scrapes means the pod restarted. The sampler catches OOMKills this way that the log watcher misses. Pod totals are the distinct pods seen anywhere in the run (60s buckets)."}],"title":"Rows in, rows committed, and what the api tier answered","eyebrow":"02 · throughput","intro":"Accepted counts rows the api tier took from k6. Committed counts rows the buffer tier durably wrote. The two track each other when nothing is lost in flight."},{"id":"pipeline","blocks":[{"unit":"milliseconds","title":"Ingest stage time, per insert","kind":"panel","chart":{"type":"line","series":[{"name":"request total","c":"s1","key":"api_request_ms"},{"name":"write phase","c":"s2","key":"write_ms"},{"name":"buffer commit","c":"s3","key":"commit_ms"},{"name":"parse phase","c":"s4","key":"parse_ms"},{"name":"write minus commit","c":"s8","key":"unattributed_ms"}],"fmt":"ms"},"note":"Parse and write are measured on the api pods over inserts; commit is measured on the buffer pods over commits. The two denominators are comparable only while inserts and commits track 1:1 — check the table below before reading <em>write minus commit<\/em> as the unattributed span."},{"unit":"milliseconds · stacked","title":"Commit phase time, per commit","kind":"panel","chart":{"type":"stack","valid":"commit_ms","series":[{"name":"encode","c":"s1","key":"commit_encode_ms"},{"name":"queue","c":"s2","key":"commit_queue_ms"},{"name":"replicate","c":"s3","key":"commit_replicate_ms"},{"name":"manifest","c":"s4","key":"commit_manifest_ms"},{"name":"accumulate","c":"s5","key":"commit_accumulate_ms"}],"fmt":"ms"},"note":"The five phases sum to the commit total. Queue time falling while the total rises means the buffer is starved, not backed up."},{"k":"the wire counter is not carrying the transport","text":"<span class=\"mono\">smolquery_buffer_wire_microseconds_total<\/span> stayed under half a millisecond per insert for this whole run. Whatever the write phase waits on, this counter is not measuring it, so the gap between the write phase and the buffer commit has no attribution.","kind":"callout","tone":"crit"}],"title":"Where an insert spends its time","eyebrow":"03 · ingest pipeline","intro":"Every stage the pipeline instruments, divided by the operations that passed through it."},{"id":"resources","blocks":[{"unit":"MB · busiest and quietest pod, against the container limit","title":"Buffer tier memory","kind":"panel","chart":{"type":"line","h":220,"series":[{"name":"busiest buffer pod","c":"s8","key":"rss_buffer_max_mb"},{"name":"quietest buffer pod","c":"s1","key":"rss_buffer_min_mb"},{"name":"container limit","c":"s4","key":"rss_buffer_limit_mb"}],"fmt":"int"},"note":"The stability test: flat or falling over the second half of a hold is sustainable, a rising trend is not, however far the peak stays below the limit.","emptyNote":"This run predates cgroup sampling in the metrics database."},{"unit":"MB · busiest pod per tier","title":"Storage and api memory","kind":"panel","chart":{"type":"line","h":200,"series":[{"name":"busiest storage pod","c":"s2","key":"rss_storage_max_mb"},{"name":"storage limit","c":"s4","key":"rss_storage_limit_mb"},{"name":"busiest api pod","c":"s3","key":"rss_api_max_mb"}],"fmt":"int"},"emptyNote":"This run predates cgroup sampling in the metrics database."},{"unit":"percent of one core · summed across the tier's pods","title":"CPU by tier","kind":"panel","chart":{"type":"line","h":200,"series":[{"name":"buffer","c":"s1","key":"cpu_buffer_pct"},{"name":"storage","c":"s2","key":"cpu_storage_pct"},{"name":"api","c":"s3","key":"cpu_api_pct"}],"fmt":"num"},"emptyNote":"This run predates cgroup sampling in the metrics database."}],"title":"Memory and CPU, read from each pod's own cgroup","eyebrow":"04 · pod resources","intro":"Counters cannot say whether a tier is stable. A pod at 3.9 GiB and climbing looks identical to one at 1.2 GiB and flat until the moment it OOMs. These come from <span class=\"mono\">/sys/fs/cgroup<\/span> in the same scrape as the counters, so memory and work share one timeline."},{"id":"hot","blocks":[{"unit":"KB per request · by route","title":"Bytes per hot-tier request","kind":"panel","chart":{"type":"line","h":210,"series":[{"name":"manifest (get)","c":"s1","key":"hot_manifest_kb"},{"name":"manifest scoped (post)","c":"s3","key":"hot_manifest_scoped_kb"},{"name":"segment","c":"s2","key":"hot_segment_kb"}],"fmt":"num"},"note":"The series that prices an O(backlog) manifest. A scoped fetch should stay flat as the backlog grows; an unscoped one should not.","emptyNote":"This build serves no hot-tier telemetry (added by T-315)."},{"unit":"manifest entries per request","title":"Entries per manifest response","kind":"panel","chart":{"type":"line","h":200,"series":[{"name":"manifest (get)","c":"s1","key":"hot_manifest_entries"},{"name":"manifest scoped (post)","c":"s3","key":"hot_manifest_scoped_entries"}],"fmt":"num"},"note":"A scoped fetch is bounded by the claim valve — 16 x seal_max_files. An unscoped one returns the whole hot tier.","emptyNote":"This build serves no hot-tier telemetry (added by T-315)."},{"unit":"milliseconds · by route","title":"Time per hot-tier request","kind":"panel","chart":{"type":"line","h":200,"series":[{"name":"manifest (get)","c":"s1","key":"hot_manifest_ms"},{"name":"manifest scoped (post)","c":"s3","key":"hot_manifest_scoped_ms"},{"name":"segment","c":"s2","key":"hot_segment_ms"}],"fmt":"ms"},"emptyNote":"This build serves no hot-tier telemetry (added by T-315)."},{"unit":"requests · by route","title":"Hot-tier requests per bucket","kind":"panel","chart":{"type":"bars","h":190,"series":[{"name":"manifest (get)","c":"s1","key":"hot_manifest_reqs"},{"name":"manifest scoped (post)","c":"s3","key":"hot_manifest_scoped_reqs"},{"name":"segment","c":"s2","key":"hot_segment_reqs"},{"name":"range responses","c":"s4","key":"hot_range_responses"}],"fmt":"int"},"note":"One DuckDB read_parquet input is a HEAD plus several ranged GETs, so segment requests price inputs, not files.","emptyNote":"This build serves no hot-tier telemetry (added by T-315)."},{"unit":"entries per bucket","title":"Manifest index churn","kind":"panel","chart":{"type":"bars","h":200,"series":[{"name":"added","c":"s1","key":"hotindex_added"},{"name":"retired","c":"s3","key":"hotindex_retired"},{"name":"reaped","c":"s2","key":"hotindex_reaped"},{"name":"recovered","c":"s4","key":"hotindex_recovered"}],"fmt":"int"},"emptyNote":"This build does not report manifest index churn (added by T-320)."},{"unit":"entries per bucket · T-320","title":"Is the hot tier in steady state?","kind":"panel","chart":{"type":"line","h":210,"series":[{"name":"resident growth","c":"s1","key":"hotindex_resident"},{"name":"seal lag (added - retired)","c":"s8","key":"hotindex_seal_lag"},{"name":"reap lag (retired - reaped)","c":"s4","key":"hotindex_reap_lag"}],"fmt":"int"},"note":"Resident entries are added + recovered - reaped. Seal lag above zero means sealing is not keeping pace, the one condition under which nothing is ever reaped and the index grows without bound. Reap lag is normal for retire_grace_ms and abnormal after it.","emptyNote":"This build does not report manifest index churn (added by T-320)."},{"unit":"microseconds · by operation","title":"HotManifest read cost, per read","kind":"panel","chart":{"type":"line","h":190,"series":[{"name":"entries","c":"s1","key":"hotread_entries_us"},{"name":"claimable","c":"s2","key":"hotread_claimable_us"},{"name":"retired_before","c":"s3","key":"hotread_retired_before_us"}],"fmt":"num"},"note":"ETS read cost inside the buffer (T-318). A read whose cost tracks the backlog is a read on the commit path worth scoping.","emptyNote":"This build does not report HotManifest read cost (added by T-318)."}],"title":"What the sealer and the query planner pull off the buffer pods","eyebrow":"04 · hot tier reads","intro":"Micro-segments live on the buffer node's own disk, so everything outside the buffer service reads them over HTTP from <span class=\"mono\">BufferService.HotServer<\/span> — the sealer pulling a claim's inputs, the planner unioning the hot tier into a plan. The segment route is cheap; a manifest response grows with the backlog unless the caller scopes it."},{"id":"seal","blocks":[{"kind":"duo","panels":[{"unit":"seconds","title":"Time per seal attempt","kind":"panel","chart":{"type":"bars","h":190,"wide":false,"series":[{"name":"succeeded","c":"s1","key":"seal_ok_s"},{"name":"errored","c":"s8","key":"seal_err_s"}],"fmt":"s"}},{"unit":"segments","title":"Segments per seal attempt","kind":"panel","chart":{"type":"bars","h":190,"wide":false,"series":[{"name":"succeeded","c":"s1","key":"seal_segs_ok"},{"name":"errored","c":"s8","key":"seal_segs_err"}],"fmt":"num"},"note":"A failed batch that always lands on the same round number is a fixed batch size, not a coincidence."}]},{"unit":"attempts and segments","title":"Seal work per bucket","kind":"panel","chart":{"type":"bars","h":200,"series":[{"name":"segments sealed","c":"s1","key":"seal_segments_ok"},{"name":"segments in failed batches","c":"s8","key":"seal_segments_err"},{"name":"attempts ok","c":"s3","key":"seal_attempts_ok"},{"name":"attempts errored","c":"s4","key":"seal_attempts_err"}],"fmt":"int"}}],"title":"Moving the hot tier into sealed Parquet","eyebrow":"04 · seal","intro":"A seal attempt takes a share of the hot backlog and writes it out. Watch time per attempt against segments per attempt: if the first grows faster than the second, the batch is unbounded."},{"id":"compaction","blocks":[{"kind":"duo","panels":[{"unit":"seconds","title":"Time per compaction","kind":"panel","chart":{"type":"bars","h":190,"wide":false,"series":[{"name":"compaction","c":"s1","key":"compact_s"}],"fmt":"s"},"emptyNote":"No compaction completed while the sampler ran."},{"unit":"segments","title":"Segments replaced per compaction","kind":"panel","chart":{"type":"bars","h":190,"wide":false,"series":[{"name":"segments","c":"s1","key":"compact_segs"}],"fmt":"num"},"emptyNote":"No compaction completed while the sampler ran."}]},{"unit":"compactions and segments","title":"Compaction work per bucket","kind":"panel","chart":{"type":"bars","h":200,"series":[{"name":"compactions ok","c":"s1","key":"compactions_ok"},{"name":"compactions errored","c":"s8","key":"compactions_err"},{"name":"segments replaced","c":"s3","key":"compact_replaced"}],"fmt":"int"},"emptyNote":"No compaction counter moved while the sampler ran."}],"title":"Merging sealed segments","eyebrow":"05 · compaction"},{"id":"housekeeping","blocks":[{"unit":"per bucket","title":"Garbage collection and snapshots","kind":"panel","chart":{"type":"bars","h":190,"series":[{"name":"segments swept","c":"s1","key":"gc_segments"},{"name":"staged files swept","c":"s2","key":"gc_staged"},{"name":"snapshots expired","c":"s3","key":"snapshots_expired"}],"fmt":"int"}},{"unit":"per bucket","title":"Lifecycle broadcasts","kind":"panel","chart":{"type":"bars","h":190,"series":[{"name":"commit","c":"s1","key":"bc_commit"},{"name":"seal","c":"s2","key":"bc_seal"},{"name":"compaction","c":"s3","key":"bc_compaction"}],"fmt":"int"}},{"unit":"per bucket","title":"Query jobs","kind":"panel","chart":{"type":"bars","h":190,"series":[{"name":"done","c":"s1","key":"jobs_done"},{"name":"errored","c":"s8","key":"jobs_error"},{"name":"cancelled","c":"s4","key":"jobs_cancelled"}],"fmt":"int"},"emptyNote":"No query job finished while the sampler ran."}],"title":"Sweeps, snapshots, broadcasts, and queries","eyebrow":"06 · housekeeping","intro":"The background work that competes with ingest for the same pods."},{"id":"data","blocks":[{"columns":["series","04:49","04:50","04:51","04:52","04:53","04:54","04:55","04:56","04:57","04:58","04:59","05:00","05:01","05:02","05:03","05:04","05:05","05:06","05:07","05:08","05:09","05:10","05:11","05:12","05:13","05:14"],"rows":[{"group":"Ingest pipeline, ms per insert"},{"cells":["parse phase",null,"0.200","0.281","0.280","0.327","0.352","0.359","0.426","0.469","0.451","0.515","0.508","0.513","0.542","0.586","0.589","0.901","1.1","1.1","1.1","1.1","1.1","1.1","1.1","1.1","0.007"]},{"cells":["write phase",null,"235","248","247","255","258","262","271","280","285","296","302","305","316","332","324","377","422","414","416","422","417","409","409","407","217"]},{"cells":["write minus commit",null,"192","193","194","192","192","195","196","198","200","199","198","197","204","205","206","239","274","274","277","273","274","277","279","284","191"]},{"group":"Buffer commit, ms per commit"},{"cells":["commit total",null,"42.6","55.2","53.6","62.2","66.6","67.0","76.0","82.4","85.7","97.3","104","108","113","127","119","138","148","140","140","149","143","132","130","123","25.6"]},{"cells":["encode",null,"30.0","41.2","39.8","47.8","51.7","51.8","60.2","66.1","68.2","78.4","83.1","86.2","91.6","104","97.7","115","127","119","120","128","122","115","113","106","13.8"]},{"cells":["queue",null,"0.511","0.622","0.624","0.675","0.707","0.745","0.802","0.861","0.921","1.2","1.2","1.6","1.5","2.3","1.4","2.0","1.2","1.4","1.0","1.1","1.1","0.909","0.877","0.887","0.624"]},{"cells":["replicate",null,"9.1","10.3","10.3","10.7","11.2","11.4","12.0","12.5","13.4","14.8","16.6","17.4","16.7","18.7","16.6","17.9","16.4","16.2","15.4","17.0","16.9","12.8","12.2","12.6","8.5"]},{"cells":["manifest",null,"3.4","3.6","3.6","3.7","3.7","3.8","3.8","3.9","4.0","4.1","4.2","4.2","4.5","4.5","4.5","4.4","4.4","4.4","4.3","4.1","4.2","4.1","4.1","4.2","3.3"]},{"cells":["accumulate",null,"252","252","252","252","252","252","253","252","253","253","254","253","253","253","253","254","253","253","253","253","253","252","252","252","252"]},{"group":"Throughput"},{"cells":["rows accepted / s",null,"28826","50224","51029","64162","70078","71212","84668","88970","90924","103598","111373","109165","121514","132887","128569","136762","132794","133920","131427","133502","135044","132271","135864","114138","549"]},{"cells":["rows committed / s",null,"28826","50139","51169","63989","70181","71177","84585","89108","91064","103423","111511","109165","121306","133463","128515","136095","133070","133782","132289","131915","135922","132000","136210","114138","550"]},{"cells":["inserts",null,"2051","3326","2621","3052","3284","3164","4525","3665","3862","4234","4410","4386","4863","5176","6318","5059","4979","5295","5036","5044","5160","6437","5233","4603","635"]},{"cells":["commits ok + error",null,"982","1451","1130","1186","1216","1151","1489","1147","1210","1225","1200","1182","1272","1240","1544","1095","980","1138","1038","987","1094","1327","1114","991","350"]},{"cells":["commit errors",null,"0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"]},{"group":"API responses"},{"cells":["2xx",null,"2055","3332","2627","3056","3287","3168","4522","3664","3862","4234","4410","4386","4861","5180","6319","5064","4983","5298","5035","5046","5155","6435","5236","4608","634"]},{"cells":["4xx",null,"0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"]},{"cells":["5xx",null,"0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"]},{"group":"Seal"},{"cells":["seconds per attempt ok",null,"0.947","6.0","2.7","3.3","4.1","4.3","4.0","4.7","3.7","5.3","7.4","10.2","12.7","15.9","12.1","8.2","5.3","3.1","3.0","3.7","4.2","5.1","5.9","7.8","3.4"]},{"cells":["segments per attempt ok",null,"32.3","44.2","42.4","39.2","43.2","39.0","40.6","37.9","50.9","40.5","36.7","38.5","34.0","35.8","31.8","33.9","26.6","29.5","30.6","28.9","26.8","31.0","29.9","27.6","30.2"]},{"cells":["attempts ok",null,"16","27","23","26","24","23","32","24","49","34","32","30","28","34","41","36","40","37","36","33","37","47","37","35","10"]},{"cells":["attempts errored",null,"0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"]},{"cells":["segments sealed",null,"516","1194","975","1020","1037","898","1298","909","2495","1376","1173","1155","953","1217","1302","1220","1062","1092","1100","955","992","1458","1105","965","302"]},{"cells":["segments in failed batches",null,"0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"]},{"group":"Pod resources"},{"cells":["buffer RSS max MB","402","625","813","900","1032","1292","1505","1715","1942","2225","2464","2677","2809","3036","3204","3268","3454","3578","3654","3698","3854","4018","3871","3813","3748","3633"]},{"cells":["buffer RSS min MB","384","573","744","860","1010","1249","1428","1677","1873","2163","2439","2582","2710","2437","2329","2452","2581","2564","2647","2665","2946","3189","3247","3394","3368","3332"]},{"cells":["buffer limit MB","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192","8192"]},{"cells":["storage RSS max MB","1986","1985","2150","1201","1556","2597","1550","4238","4971","2654","2940","2738","2621","5584","6144","5793","5657","6099","5816","3315","4226","2945","3523","4293","3959","3825"]},{"cells":["api RSS max MB","238","262","263","265","271","266","273","264","268","268","276","273","268","270","275","275","273","274","275","277","275","275","276","269","247","245"]},{"cells":["buffer CPU %",null,"24.9","38","37.7","43.9","47.9","48.8","55.6","57.1","62","65.7","68.5","67.5","73.5","78","74.3","76.7","71.7","73","71.4","71.7","73.2","62.7","64.8","55","12.9"]},{"cells":["storage CPU %",null,"52.9","58.6","23.7","37.7","44.3","45.3","51.3","55.7","61.4","62.5","65.9","63.7","74.2","76.4","67.5","66.3","52.8","49","46.9","50.8","49.5","54","64.2","66.2","69.2"]},{"cells":["api CPU %",null,"3.4","4.5","4.5","5.1","5.4","5.6","6.1","6.3","6.6","7.2","7.5","7.4","8","8.4","8.3","8.7","8.5","8.5","8.5","8.5","8.7","8.5","8.8","7.5","1.8"]},{"group":"Hot tier reads"},{"cells":["KB per manifest get",null,"316","406","511","618","737","857","1000","1154","1303","1474","1649","1718","1729","1743","1719","1821","1721","1674","1622","1584","1533","1484","1447","1404","1323"]},{"cells":["KB per manifest scoped post",null,"24.9","43.1","41.2","35.9","41.8","39.9","39.7","38.6","36.9","35.4","32.9","36.2","31.4","33.2","31.1","30.7","22.5","24.8","25.1","23.1","24.5","25.1","24.5","23.7","29.1"]},{"cells":["KB per segment request",null,"87.8","110","114","126","142","152","158","173","94.1","169","202","215","244","263","258","283","298","285","280","298","307","269","296","319","244"]},{"cells":["entries per manifest get",null,"236","303","381","461","549","639","744","859","970","1098","1227","1279","1287","1298","1279","1355","1280","1245","1207","1178","1140","1104","1076","1045","984"]},{"cells":["entries per scoped post",null,"33.5","44.8","42.9","37.7","43.4","39.4","40.2","38.0","50.9","40.2","36.7","38.5","33.8","35.7","32.3","33.0","26.3","29.6","30.7","27.2","28.7","30.7","29.9","27.8","31.9"]},{"cells":["ms per manifest get",null,"17.4","25.3","25.7","33.8","40.2","56.6","62.9","85.9","99.6","130","153","176","149","168","166","178","164","126","133","134","138","136","136","118","90.4"]},{"cells":["ms per scoped post",null,"0.949","1.6","1.6","1.1","1.4","1.5","2.1","3.5","2.9","1.8","1.6","2.2","1.8","4.0","4.0","2.8","1.6","0.884","1.1","1.2","1.5","1.9","1.0","1.2","2.0"]},{"cells":["ms per segment request",null,"1.8","2.8","1.9","2.8","2.5","1.9","2.3","3.9","3.5","4.8","6.4","6.1","7.5","10.2","8.2","8.6","6.7","6.4","5.9","7.0","7.1","4.9","5.4","6.3","5.1"]},{"cells":["manifest gets",null,"27","36","36","36","36","36","45","27","36","36","36","36","36","36","37","35","36","36","36","36","36","36","36","36","18"]},{"cells":["scoped posts",null,"35","53","47","49","49","47","63","49","98","69","65","61","59","67","84","66","80","73","71","75","69","93","74","68","26"]},{"cells":["segment requests",null,"2873","5559","4750","4100","5025","4451","5479","4229","9341","6652","6396","6663","6793","7848","8457","7233","6290","6219","6211","6165","6070","7646","6631","6203","2631"]},{"cells":["range responses",null,"1840","3520","3027","2637","3213","2855","3574","2722","6085","4198","3972","4085","4057","4683","5065","4286","3767","3748","3745","3697","3629","4656","3966","3671","1537"]},{"cells":["index entries added",null,"1969","2906","2256","2369","2436","2300","2976","2297","2516","2450","2400","2363","2546","2479","3091","2188","1959","2276","2075","1975","2189","2655","2227","1982","699"]},{"cells":["index entries retired",null,"1032","2324","2014","2040","2074","1796","2596","1818","4990","2713","2385","2310","1906","2434","2604","2440","2124","2184","2200","1930","1964","2916","2210","1930","604"]},{"cells":["index entries recovered",null,"0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"]},{"cells":["index entries reaped",null,"1012","1292","865","849","978","1028","1104","552","663","636","1062","1970","2054","1918","2744","1884","1926","2007","4626","2976","2446","2724","2152","2396","968"]},{"cells":["index resident growth",null,"957","1614","1391","1520","1458","1272","1872","1745","1853","1814","1338","393","492","561","347","304","33","269","-2551","-1001","-257","-69","75","-414","-269"]},{"cells":["index seal lag",null,"937","582","242","329","362","504","380","479","-2474","-263","15","53","640","45","487","-252","-165","92","-125","45","225","-261","17","52","95"]},{"cells":["index reap lag",null,"20","1032","1149","1191","1096","768","1492","1266","4327","2077","1323","340","-148","516","-140","556","198","177","-2426","-1046","-482","192","58","-466","-364"]},{"cells":["us per entries read",null,"6035","8089","9633","11929","14576","17545","25760","29292","33474","38376","40771","43924","43414","45406","45299","44166","42636","39047","38887","40322","39817","34657","25561","26688","22473"]},{"cells":["us per claimable read",null,"169","237","242","273","294","344","431","462","524","551","577","596","639","617","621","589","505","483","466","451","463","402","416","383","256"]},{"cells":["us per retired_before read",null,"9.4","10.0","8.9","9.6","9.5","9.2","9.5","9.1","9.5","9.1","9.0","9.7","11.4","9.9","9.0","9.0","10.0","8.6","9.5","9.0","8.3","8.5","8.5","8.8","8.6"]},{"cells":["entries per entries read",null,"331","438","558","666","786","900","1045","1218","1373","1519","1702","1772","1780","1806","1824","1822","1764","1689","1657","1627","1583","1352","1076","1020","984"]},{"cells":["entries per claimable read",null,"11.9","14.4","13.8","13.9","14.1","13.2","12.9","12.4","12.2","10.4","9.6","9.4","10.0","9.3","9.5","8.3","7.4","9.2","8.3","7.5","8.8","8.4","8.8","8.2","8.5"]},{"cells":["entries reads",null,"211","406","302","279","268","246","286","196","186","178","170","162","158","162","189","151","155","159","158","158","157","63","36","37","18"]},{"cells":["claimable reads",null,"5963","7774","6249","6274","6344","6311","7992","6234","6286","6433","6384","6415","6564","6645","8061","6148","5942","6331","5989","6032","6229","7572","6189","6055","2686"]},{"cells":["retired_before reads",null,"10433","13208","10682","10623","10693","10776","13557","10617","10649","10838","10788","10908","10993","11247","13588","10623","10341","10813","10321","10516","10694","13026","10577","10597","4921"]},{"group":"Compaction"},{"cells":["segments replaced",null,"5","45","24","33","12","6","42","14","27","16","18","19","2","19","3","2","82","14","69","25","23","32","32","21","0"]},{"group":"Housekeeping"},{"cells":["broadcasts commit",null,"982","1451","1130","1186","1216","1151","1489","1147","1210","1225","1200","1182","1272","1240","1544","1095","980","1138","1038","987","1094","1327","1114","991","350"]},{"cells":["broadcasts seal",null,"16","27","23","26","24","23","32","24","49","34","32","30","28","34","41","36","40","37","36","33","37","47","37","35","10"]},{"cells":["broadcasts compaction",null,"2","8","4","11","3","2","8","2","7","4","4","5","1","4","1","1","6","3","4","5","6","8","5","5","0"]},{"group":"Query jobs"},{"cells":["ms per finished job",null,"899","1477","1459","1506","1442","1545","1552","1748","1766","1938","2158","2201","2538","2775","2580","2757","2489","3236","2499","5327","4053","2338","4344","3719","2150"]},{"cells":["done",null,"4","4","4","4","4","4","5","3","4","4","4","4","3","4","5","4","4","4","4","4","3","5","4","4","2"]},{"cells":["errored",null,"0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"]}],"kind":"table"}],"title":"The full bucketed table","eyebrow":"08 · every series","intro":"A shaded bucket is one the sampler never covered. A dash in the table is the same thing, or a bucket dropped for a counter reset or too few operations. A series that never moved is left out of this table entirely."},{"id":"unclassified","blocks":[{"columns":["metric","labels","pods","delta over the run"],"rows":[{"cells":["smolquery_api_request_microseconds_bucket","{route=\"catalog\",le=\"+Inf\"}","2","3"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"catalog\",le=\"100000\"}","2","2"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"catalog\",le=\"1000000\"}","2","3"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"catalog\",le=\"10000000\"}","2","3"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"catalog\",le=\"25000\"}","2","0"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"catalog\",le=\"250000\"}","2","3"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"catalog\",le=\"2500000\"}","2","3"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"catalog\",le=\"500000\"}","2","3"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"insert\",le=\"+Inf\"}","3","105174"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"insert\",le=\"100000\"}","3","2687"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"insert\",le=\"1000000\"}","3","105174"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"insert\",le=\"10000000\"}","3","105174"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"insert\",le=\"25000\"}","3","4"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"insert\",le=\"250000\"}","3","21490"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"insert\",le=\"2500000\"}","3","105174"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"insert\",le=\"5000\"}","3","0"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"insert\",le=\"500000\"}","3","93221"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"ops\",le=\"+Inf\"}","6","1182"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"ops\",le=\"100000\"}","6","1182"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"ops\",le=\"1000000\"}","6","1182"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"ops\",le=\"10000000\"}","6","1182"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"ops\",le=\"25000\"}","6","1182"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"ops\",le=\"250000\"}","6","1182"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"ops\",le=\"2500000\"}","6","1182"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"ops\",le=\"5000\"}","6","1182"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"ops\",le=\"500000\"}","6","1182"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"+Inf\"}","3","98"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"100000\"}","1","0"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"1000000\"}","3","2"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"10000000\"}","3","98"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"1500000\"}","3","16"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"15000000\"}","3","98"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"2000000\"}","3","40"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"20000000\"}","3","98"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"250000\"}","2","0"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"3000000\"}","3","84"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"30000000\"}","3","98"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"50000\"}","1","0"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"500000\"}","3","2"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"5000000\"}","3","90"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"60000000\"}","3","98"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"750000\"}","3","2"]},{"cells":["smolquery_api_request_microseconds_bucket","{route=\"query\",le=\"7500000\"}","3","98"]},{"cells":["smolquery_buffer_commit_bytes_total","","3","139365708767"]},{"cells":["smolquery_buffer_commit_rows_bucket","{le=\"+Inf\"}","3","28739"]},{"cells":["smolquery_buffer_commit_rows_bucket","{le=\"1000\"}","3","17054"]},{"cells":["smolquery_buffer_commit_rows_bucket","{le=\"16000\"}","3","25486"]},{"cells":["smolquery_buffer_commit_rows_bucket","{le=\"4000\"}","3","17986"]},{"cells":["smolquery_buffer_commit_rows_bucket","{le=\"64000\"}","3","28739"]},{"cells":["smolquery_buffer_flush_trigger_total","{reason=\"interval\"}","3","28739"]},{"cells":["smolquery_buffer_unsealed_bytes","","3","26480363223"]},{"cells":["smolquery_buffer_unsealed_entries_limit","","3","0"]},{"cells":["smolquery_buffer_unsealed_entries","","3","118674"]},{"cells":["smolquery_burst_boot_ms_total","","1","0"]},{"cells":["smolquery_burst_boots_total","{outcome=\"ok\"}","1","0"]},{"cells":["smolquery_catalog_commit_attempts_total","{attempt=\"1\",result=\"ok\"}","5","902"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"create_dataset\",result=\"ok\",le=\"+Inf\"}","2","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"create_dataset\",result=\"ok\",le=\"100000\"}","1","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"create_dataset\",result=\"ok\",le=\"1000000\"}","2","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"create_dataset\",result=\"ok\",le=\"250000\"}","2","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"create_dataset\",result=\"ok\",le=\"30000000\"}","2","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"create_dataset\",result=\"ok\",le=\"5000000\"}","2","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"create_dataset\",result=\"ok\",le=\"60000000\"}","2","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"create_table\",result=\"ok\",le=\"+Inf\"}","1","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"create_table\",result=\"ok\",le=\"100000\"}","1","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"create_table\",result=\"ok\",le=\"1000000\"}","1","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"create_table\",result=\"ok\",le=\"25000\"}","1","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"create_table\",result=\"ok\",le=\"250000\"}","1","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"create_table\",result=\"ok\",le=\"30000000\"}","1","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"create_table\",result=\"ok\",le=\"5000000\"}","1","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"create_table\",result=\"ok\",le=\"60000000\"}","1","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"current_snapshot\",result=\"ok\",le=\"+Inf\"}","5","1291"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"current_snapshot\",result=\"ok\",le=\"1000\"}","4","26"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"current_snapshot\",result=\"ok\",le=\"100000\"}","5","1291"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"current_snapshot\",result=\"ok\",le=\"1000000\"}","5","1291"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"current_snapshot\",result=\"ok\",le=\"25000\"}","5","1289"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"current_snapshot\",result=\"ok\",le=\"250000\"}","5","1291"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"current_snapshot\",result=\"ok\",le=\"30000000\"}","5","1291"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"current_snapshot\",result=\"ok\",le=\"5000\"}","5","1261"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"current_snapshot\",result=\"ok\",le=\"5000000\"}","5","1291"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"current_snapshot\",result=\"ok\",le=\"60000000\"}","5","1291"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"file_column_stats\",result=\"ok\",le=\"+Inf\"}","3","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"file_column_stats\",result=\"ok\",le=\"100000\"}","3","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"file_column_stats\",result=\"ok\",le=\"1000000\"}","3","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"file_column_stats\",result=\"ok\",le=\"25000\"}","3","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"file_column_stats\",result=\"ok\",le=\"250000\"}","3","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"file_column_stats\",result=\"ok\",le=\"30000000\"}","3","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"file_column_stats\",result=\"ok\",le=\"5000\"}","3","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"file_column_stats\",result=\"ok\",le=\"5000000\"}","3","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"file_column_stats\",result=\"ok\",le=\"60000000\"}","3","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"known_segments\",result=\"ok\",le=\"+Inf\"}","3","15"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"known_segments\",result=\"ok\",le=\"100000\"}","3","5"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"known_segments\",result=\"ok\",le=\"1000000\"}","3","14"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"known_segments\",result=\"ok\",le=\"250000\"}","3","12"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"known_segments\",result=\"ok\",le=\"30000000\"}","3","15"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"known_segments\",result=\"ok\",le=\"5000000\"}","3","15"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"known_segments\",result=\"ok\",le=\"60000000\"}","3","15"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_datasets\",result=\"ok\",le=\"+Inf\"}","7","8"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_datasets\",result=\"ok\",le=\"100000\"}","7","7"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_datasets\",result=\"ok\",le=\"1000000\"}","7","8"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_datasets\",result=\"ok\",le=\"25000\"}","7","7"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_datasets\",result=\"ok\",le=\"250000\"}","7","8"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_datasets\",result=\"ok\",le=\"30000000\"}","7","8"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_datasets\",result=\"ok\",le=\"5000\"}","3","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_datasets\",result=\"ok\",le=\"5000000\"}","7","8"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_datasets\",result=\"ok\",le=\"60000000\"}","7","8"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_tables\",result=\"ok\",le=\"+Inf\"}","6","77"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_tables\",result=\"ok\",le=\"100000\"}","6","77"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_tables\",result=\"ok\",le=\"1000000\"}","6","77"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_tables\",result=\"ok\",le=\"25000\"}","6","54"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_tables\",result=\"ok\",le=\"250000\"}","6","77"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_tables\",result=\"ok\",le=\"30000000\"}","6","77"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_tables\",result=\"ok\",le=\"5000000\"}","6","77"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"list_tables\",result=\"ok\",le=\"60000000\"}","6","77"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"partitions\",result=\"ok\",le=\"+Inf\"}","2","1194"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"partitions\",result=\"ok\",le=\"100000\"}","2","1191"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"partitions\",result=\"ok\",le=\"1000000\"}","2","1194"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"partitions\",result=\"ok\",le=\"25000\"}","2","1182"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"partitions\",result=\"ok\",le=\"250000\"}","2","1194"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"partitions\",result=\"ok\",le=\"30000000\"}","2","1194"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"partitions\",result=\"ok\",le=\"5000\"}","2","48"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"partitions\",result=\"ok\",le=\"5000000\"}","2","1194"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"partitions\",result=\"ok\",le=\"60000000\"}","2","1194"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"put_table_options\",result=\"ok\",le=\"+Inf\"}","1","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"put_table_options\",result=\"ok\",le=\"100000\"}","1","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"put_table_options\",result=\"ok\",le=\"1000000\"}","1","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"put_table_options\",result=\"ok\",le=\"25000\"}","1","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"put_table_options\",result=\"ok\",le=\"250000\"}","1","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"put_table_options\",result=\"ok\",le=\"30000000\"}","1","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"put_table_options\",result=\"ok\",le=\"5000000\"}","1","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"put_table_options\",result=\"ok\",le=\"60000000\"}","1","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"register_segments\",result=\"ok\",le=\"+Inf\"}","3","791"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"register_segments\",result=\"ok\",le=\"100000\"}","3","51"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"register_segments\",result=\"ok\",le=\"1000000\"}","3","688"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"register_segments\",result=\"ok\",le=\"250000\"}","3","363"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"register_segments\",result=\"ok\",le=\"30000000\"}","3","791"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"register_segments\",result=\"ok\",le=\"5000000\"}","3","791"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"register_segments\",result=\"ok\",le=\"60000000\"}","3","791"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"registered_through\",result=\"ok\",le=\"+Inf\"}","3","98"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"registered_through\",result=\"ok\",le=\"1000\"}","1","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"registered_through\",result=\"ok\",le=\"100000\"}","3","98"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"registered_through\",result=\"ok\",le=\"1000000\"}","3","98"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"registered_through\",result=\"ok\",le=\"25000\"}","3","93"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"registered_through\",result=\"ok\",le=\"250000\"}","3","98"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"registered_through\",result=\"ok\",le=\"30000000\"}","3","98"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"registered_through\",result=\"ok\",le=\"5000\"}","3","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"registered_through\",result=\"ok\",le=\"5000000\"}","3","98"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"registered_through\",result=\"ok\",le=\"60000000\"}","3","98"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"replace_segments\",result=\"ok\",le=\"+Inf\"}","3","108"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"replace_segments\",result=\"ok\",le=\"1000000\"}","3","103"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"replace_segments\",result=\"ok\",le=\"250000\"}","3","56"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"replace_segments\",result=\"ok\",le=\"30000000\"}","3","108"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"replace_segments\",result=\"ok\",le=\"5000000\"}","3","108"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"replace_segments\",result=\"ok\",le=\"60000000\"}","3","108"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"retention\",result=\"ok\",le=\"+Inf\"}","4","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"retention\",result=\"ok\",le=\"100000\"}","4","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"retention\",result=\"ok\",le=\"1000000\"}","4","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"retention\",result=\"ok\",le=\"25000\"}","3","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"retention\",result=\"ok\",le=\"250000\"}","4","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"retention\",result=\"ok\",le=\"30000000\"}","4","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"retention\",result=\"ok\",le=\"5000\"}","3","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"retention\",result=\"ok\",le=\"5000000\"}","4","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"retention\",result=\"ok\",le=\"60000000\"}","4","1"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"schema_version\",result=\"ok\",le=\"+Inf\"}","6","28739"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"schema_version\",result=\"ok\",le=\"1000\"}","4","15791"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"schema_version\",result=\"ok\",le=\"100000\"}","6","28736"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"schema_version\",result=\"ok\",le=\"1000000\"}","6","28739"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"schema_version\",result=\"ok\",le=\"25000\"}","6","28631"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"schema_version\",result=\"ok\",le=\"250000\"}","6","28738"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"schema_version\",result=\"ok\",le=\"30000000\"}","6","28739"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"schema_version\",result=\"ok\",le=\"5000\"}","6","27390"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"schema_version\",result=\"ok\",le=\"5000000\"}","6","28739"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"schema_version\",result=\"ok\",le=\"60000000\"}","6","28739"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_files\",result=\"ok\",le=\"+Inf\"}","6","2163"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_files\",result=\"ok\",le=\"100000\"}","6","2156"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_files\",result=\"ok\",le=\"1000000\"}","6","2163"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_files\",result=\"ok\",le=\"25000\"}","6","1530"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_files\",result=\"ok\",le=\"250000\"}","6","2162"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_files\",result=\"ok\",le=\"30000000\"}","6","2163"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_files\",result=\"ok\",le=\"5000\"}","6","605"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_files\",result=\"ok\",le=\"5000000\"}","6","2163"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_files\",result=\"ok\",le=\"60000000\"}","6","2163"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_stats\",result=\"ok\",le=\"+Inf\"}","3","1291"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_stats\",result=\"ok\",le=\"1000\"}","1","0"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_stats\",result=\"ok\",le=\"100000\"}","3","1289"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_stats\",result=\"ok\",le=\"1000000\"}","3","1291"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_stats\",result=\"ok\",le=\"25000\"}","3","1282"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_stats\",result=\"ok\",le=\"250000\"}","3","1291"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_stats\",result=\"ok\",le=\"30000000\"}","3","1291"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_stats\",result=\"ok\",le=\"5000\"}","3","1245"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_stats\",result=\"ok\",le=\"5000000\"}","3","1291"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segment_stats\",result=\"ok\",le=\"60000000\"}","3","1291"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segments\",result=\"ok\",le=\"+Inf\"}","3","907"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segments\",result=\"ok\",le=\"100000\"}","3","662"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segments\",result=\"ok\",le=\"1000000\"}","3","902"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segments\",result=\"ok\",le=\"25000\"}","3","434"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segments\",result=\"ok\",le=\"250000\"}","3","832"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segments\",result=\"ok\",le=\"30000000\"}","3","907"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segments\",result=\"ok\",le=\"5000000\"}","3","907"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"segments\",result=\"ok\",le=\"60000000\"}","3","907"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"table_schema\",result=\"ok\",le=\"+Inf\"}","12","1431"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"table_schema\",result=\"ok\",le=\"100000\"}","12","1424"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"table_schema\",result=\"ok\",le=\"1000000\"}","12","1431"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"table_schema\",result=\"ok\",le=\"25000\"}","12","1335"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"table_schema\",result=\"ok\",le=\"250000\"}","12","1431"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"table_schema\",result=\"ok\",le=\"30000000\"}","12","1431"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"table_schema\",result=\"ok\",le=\"5000\"}","12","1184"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"table_schema\",result=\"ok\",le=\"5000000\"}","12","1431"]},{"cells":["smolquery_catalog_op_microseconds_bucket","{op=\"table_schema\",result=\"ok\",le=\"60000000\"}","12","1431"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"create_dataset\",result=\"ok\"}","2","0"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"create_table\",result=\"ok\"}","1","14364"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"current_snapshot\",result=\"ok\"}","5","2017733"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"file_column_stats\",result=\"ok\"}","3","0"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"known_segments\",result=\"ok\"}","3","3564954"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"list_datasets\",result=\"ok\"}","7","173177"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"list_tables\",result=\"ok\"}","6","2086175"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"partitions\",result=\"ok\"}","2","7842465"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"put_table_options\",result=\"ok\"}","1","7948"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"register_segments\",result=\"ok\"}","3","392599184"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"registered_through\",result=\"ok\"}","3","1372364"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"replace_segments\",result=\"ok\"}","3","41911578"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"retention\",result=\"ok\"}","4","3528"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"schema_version\",result=\"ok\"}","6","46926993"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"segment_files\",result=\"ok\"}","6","40435680"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"segment_stats\",result=\"ok\"}","3","3925198"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"segments\",result=\"ok\"}","3","83373992"]},{"cells":["smolquery_catalog_op_microseconds_total","{op=\"table_schema\",result=\"ok\"}","12","13112370"]},{"cells":["smolquery_catalog_ops_total","{op=\"create_dataset\",result=\"ok\"}","2","0"]},{"cells":["smolquery_catalog_ops_total","{op=\"create_table\",result=\"ok\"}","1","1"]},{"cells":["smolquery_catalog_ops_total","{op=\"current_snapshot\",result=\"ok\"}","5","1291"]},{"cells":["smolquery_catalog_ops_total","{op=\"file_column_stats\",result=\"ok\"}","3","0"]},{"cells":["smolquery_catalog_ops_total","{op=\"known_segments\",result=\"ok\"}","3","15"]},{"cells":["smolquery_catalog_ops_total","{op=\"list_datasets\",result=\"ok\"}","7","8"]},{"cells":["smolquery_catalog_ops_total","{op=\"list_tables\",result=\"ok\"}","6","77"]},{"cells":["smolquery_catalog_ops_total","{op=\"partitions\",result=\"ok\"}","2","1194"]},{"cells":["smolquery_catalog_ops_total","{op=\"put_table_options\",result=\"ok\"}","1","1"]},{"cells":["smolquery_catalog_ops_total","{op=\"register_segments\",result=\"ok\"}","3","791"]},{"cells":["smolquery_catalog_ops_total","{op=\"registered_through\",result=\"ok\"}","3","98"]},{"cells":["smolquery_catalog_ops_total","{op=\"replace_segments\",result=\"ok\"}","3","108"]},{"cells":["smolquery_catalog_ops_total","{op=\"retention\",result=\"ok\"}","4","1"]},{"cells":["smolquery_catalog_ops_total","{op=\"schema_version\",result=\"ok\"}","6","28739"]},{"cells":["smolquery_catalog_ops_total","{op=\"segment_files\",result=\"ok\"}","6","2163"]},{"cells":["smolquery_catalog_ops_total","{op=\"segment_stats\",result=\"ok\"}","3","1291"]},{"cells":["smolquery_catalog_ops_total","{op=\"segments\",result=\"ok\"}","3","907"]},{"cells":["smolquery_catalog_ops_total","{op=\"table_schema\",result=\"ok\"}","12","1431"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"commit\",result=\"ok\",le=\"+Inf\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"commit\",result=\"ok\",le=\"100000\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"commit\",result=\"ok\",le=\"1000000\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"commit\",result=\"ok\",le=\"25000\"}","3","104"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"commit\",result=\"ok\",le=\"250000\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"commit\",result=\"ok\",le=\"30000000\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"commit\",result=\"ok\",le=\"5000\"}","3","102"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"commit\",result=\"ok\",le=\"5000000\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"commit\",result=\"ok\",le=\"60000000\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"move\",result=\"error\",le=\"+Inf\"}","1","0"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"move\",result=\"error\",le=\"1000000\"}","1","0"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"move\",result=\"error\",le=\"250000\"}","1","0"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"move\",result=\"error\",le=\"30000000\"}","1","0"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"move\",result=\"error\",le=\"5000000\"}","1","0"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"move\",result=\"error\",le=\"60000000\"}","1","0"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"move\",result=\"ok\",le=\"+Inf\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"move\",result=\"ok\",le=\"100000\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"move\",result=\"ok\",le=\"1000000\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"move\",result=\"ok\",le=\"25000\"}","3","101"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"move\",result=\"ok\",le=\"250000\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"move\",result=\"ok\",le=\"30000000\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"move\",result=\"ok\",le=\"5000\"}","1","0"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"move\",result=\"ok\",le=\"5000000\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"move\",result=\"ok\",le=\"60000000\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"postgrex\",result=\"ok\",le=\"+Inf\"}","12","36894"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"postgrex\",result=\"ok\",le=\"1000\"}","9","18306"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"postgrex\",result=\"ok\",le=\"100000\"}","12","36874"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"postgrex\",result=\"ok\",le=\"1000000\"}","12","36894"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"postgrex\",result=\"ok\",le=\"25000\"}","12","36013"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"postgrex\",result=\"ok\",le=\"250000\"}","12","36892"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"postgrex\",result=\"ok\",le=\"30000000\"}","12","36894"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"postgrex\",result=\"ok\",le=\"5000\"}","12","33643"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"postgrex\",result=\"ok\",le=\"5000000\"}","12","36894"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"postgrex\",result=\"ok\",le=\"60000000\"}","12","36894"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"query\",result=\"ok\",le=\"+Inf\"}","8","5085"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"query\",result=\"ok\",le=\"100000\"}","8","3850"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"query\",result=\"ok\",le=\"1000000\"}","8","5016"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"query\",result=\"ok\",le=\"25000\"}","8","3177"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"query\",result=\"ok\",le=\"250000\"}","8","4551"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"query\",result=\"ok\",le=\"30000000\"}","8","5085"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"query\",result=\"ok\",le=\"5000\"}","7","584"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"query\",result=\"ok\",le=\"5000000\"}","8","5085"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"query\",result=\"ok\",le=\"60000000\"}","8","5085"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"stage\",result=\"ok\",le=\"+Inf\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"stage\",result=\"ok\",le=\"100000\"}","3","52"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"stage\",result=\"ok\",le=\"1000000\"}","3","106"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"stage\",result=\"ok\",le=\"250000\"}","3","88"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"stage\",result=\"ok\",le=\"30000000\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"stage\",result=\"ok\",le=\"5000000\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"stage\",result=\"ok\",le=\"60000000\"}","3","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"transaction\",result=\"error\",le=\"+Inf\"}","1","0"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"transaction\",result=\"error\",le=\"1000000\"}","1","0"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"transaction\",result=\"error\",le=\"250000\"}","1","0"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"transaction\",result=\"error\",le=\"30000000\"}","1","0"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"transaction\",result=\"error\",le=\"5000000\"}","1","0"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"transaction\",result=\"error\",le=\"60000000\"}","1","0"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"transaction\",result=\"ok\",le=\"+Inf\"}","4","109"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"transaction\",result=\"ok\",le=\"100000\"}","4","108"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"transaction\",result=\"ok\",le=\"1000000\"}","4","109"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"transaction\",result=\"ok\",le=\"25000\"}","4","94"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"transaction\",result=\"ok\",le=\"250000\"}","4","109"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"transaction\",result=\"ok\",le=\"30000000\"}","4","109"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"transaction\",result=\"ok\",le=\"5000000\"}","4","109"]},{"cells":["smolquery_catalog_statement_microseconds_bucket","{kind=\"transaction\",result=\"ok\",le=\"60000000\"}","4","109"]},{"cells":["smolquery_catalog_statement_microseconds_total","{kind=\"commit\",result=\"ok\"}","3","503431"]},{"cells":["smolquery_catalog_statement_microseconds_total","{kind=\"move\",result=\"error\"}","1","0"]},{"cells":["smolquery_catalog_statement_microseconds_total","{kind=\"move\",result=\"ok\"}","3","1143124"]},{"cells":["smolquery_catalog_statement_microseconds_total","{kind=\"postgrex\",result=\"ok\"}","12","110828149"]},{"cells":["smolquery_catalog_statement_microseconds_total","{kind=\"query\",result=\"ok\"}","8","505632424"]},{"cells":["smolquery_catalog_statement_microseconds_total","{kind=\"stage\",result=\"ok\"}","3","19199718"]},{"cells":["smolquery_catalog_statement_microseconds_total","{kind=\"transaction\",result=\"error\"}","1","0"]},{"cells":["smolquery_catalog_statement_microseconds_total","{kind=\"transaction\",result=\"ok\"}","4","2004323"]},{"cells":["smolquery_catalog_statements_total","{kind=\"commit\",result=\"ok\"}","3","108"]},{"cells":["smolquery_catalog_statements_total","{kind=\"move\",result=\"error\"}","1","0"]},{"cells":["smolquery_catalog_statements_total","{kind=\"move\",result=\"ok\"}","3","108"]},{"cells":["smolquery_catalog_statements_total","{kind=\"postgrex\",result=\"ok\"}","12","36894"]},{"cells":["smolquery_catalog_statements_total","{kind=\"query\",result=\"ok\"}","8","5085"]},{"cells":["smolquery_catalog_statements_total","{kind=\"stage\",result=\"ok\"}","3","108"]},{"cells":["smolquery_catalog_statements_total","{kind=\"transaction\",result=\"error\"}","1","0"]},{"cells":["smolquery_catalog_statements_total","{kind=\"transaction\",result=\"ok\"}","4","109"]},{"cells":["smolquery_clickhouse_catalog_refresh_microseconds_total","{result=\"rebuilt\"}","3","0"]},{"cells":["smolquery_clickhouse_catalog_refreshes_total","{result=\"rebuilt\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"other\",le=\"+Inf\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"other\",le=\"100000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"other\",le=\"1000000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"other\",le=\"10000000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"other\",le=\"25000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"other\",le=\"250000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"other\",le=\"2500000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"other\",le=\"5000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"other\",le=\"500000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"+Inf\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"100000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"1000000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"10000000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"1500000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"15000000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"2000000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"20000000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"250000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"3000000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"30000000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"50000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"500000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"5000000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"60000000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"750000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_bucket","{kind=\"query\",le=\"7500000\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_total","{kind=\"other\"}","3","0"]},{"cells":["smolquery_clickhouse_request_microseconds_total","{kind=\"query\"}","3","0"]},{"cells":["smolquery_clickhouse_requests_total","{class=\"2xx\"}","3","0"]},{"cells":["smolquery_clickhouse_requests_total","{class=\"4xx\"}","3","0"]},{"cells":["smolquery_compaction_lane_microseconds_total","{lane=\"fresh\"}","3","164072353"]},{"cells":["smolquery_compaction_lane_microseconds_total","{lane=\"hour\"}","3","318832433"]},{"cells":["smolquery_compaction_lane_microseconds_total","{lane=\"span\"}","3","1976776800"]},{"cells":["smolquery_compaction_lane_tables","{lane=\"span\",state=\"cooling\"}","3","0"]},{"cells":["smolquery_compaction_lane_tables","{lane=\"span\",state=\"waiting\"}","3","167"]},{"cells":["smolquery_compaction_listed_files_max","","3","0"]},{"cells":["smolquery_compaction_listed_files","","3","309"]},{"cells":["smolquery_compaction_spill_free_bytes","","3","474304151552"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"advance\",result=\"ok\",le=\"+Inf\"}","3","0"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"advance\",result=\"ok\",le=\"100000\"}","3","0"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"advance\",result=\"ok\",le=\"1000000\"}","3","0"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"advance\",result=\"ok\",le=\"25000\"}","3","0"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"advance\",result=\"ok\",le=\"250000\"}","3","0"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"advance\",result=\"ok\",le=\"30000000\"}","3","0"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"advance\",result=\"ok\",le=\"5000\"}","3","0"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"fetch\",result=\"ok\",le=\"+Inf\"}","6","13229"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"fetch\",result=\"ok\",le=\"1000\"}","6","4130"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"fetch\",result=\"ok\",le=\"100000\"}","6","13229"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"fetch\",result=\"ok\",le=\"1000000\"}","6","13229"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"fetch\",result=\"ok\",le=\"25000\"}","6","13185"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"fetch\",result=\"ok\",le=\"250000\"}","6","13229"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"fetch\",result=\"ok\",le=\"30000000\"}","6","13229"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"fetch\",result=\"ok\",le=\"5000\"}","6","12697"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"setup\",result=\"ok\",le=\"+Inf\"}","6","0"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"setup\",result=\"ok\",le=\"100000\"}","6","0"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"setup\",result=\"ok\",le=\"1000000\"}","6","0"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"setup\",result=\"ok\",le=\"25000\"}","6","0"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"setup\",result=\"ok\",le=\"250000\"}","6","0"]},{"cells":["smolquery_config_store_op_microseconds_bucket","{op=\"setup\",result=\"ok\",le=\"30000000\"}","6","0"]},{"cells":["smolquery_config_store_op_microseconds_total","{op=\"advance\",result=\"ok\"}","3","0"]},{"cells":["smolquery_config_store_op_microseconds_total","{op=\"fetch\",result=\"ok\"}","6","22527235"]},{"cells":["smolquery_config_store_op_microseconds_total","{op=\"setup\",result=\"ok\"}","6","0"]},{"cells":["smolquery_config_store_ops_total","{op=\"advance\",result=\"ok\"}","3","0"]},{"cells":["smolquery_config_store_ops_total","{op=\"fetch\",result=\"ok\"}","6","13229"]},{"cells":["smolquery_config_store_ops_total","{op=\"setup\",result=\"ok\"}","6","0"]},{"cells":["smolquery_hot_manifest_compaction_bytes_reclaimed_total","","3","34295948"]},{"cells":["smolquery_hot_manifest_compaction_microseconds_total","","3","1199230"]},{"cells":["smolquery_hot_manifest_compactions_total","","3","29"]},{"cells":["smolquery_memory_beam_bytes","{kind=\"binary\"}","12","18236784992"]},{"cells":["smolquery_memory_beam_bytes","{kind=\"ets\"}","12","11947530112"]},{"cells":["smolquery_memory_beam_bytes","{kind=\"processes\"}","12","65188934432"]},{"cells":["smolquery_memory_beam_bytes","{kind=\"total\"}","12","144077255296"]},{"cells":["smolquery_memory_cgroup_bytes","{kind=\"anon\"}","12","585305149440"]},{"cells":["smolquery_memory_cgroup_bytes","{kind=\"current\"}","12","1407610200064"]},{"cells":["smolquery_memory_cgroup_bytes","{kind=\"file\"}","12","169972965376"]},{"cells":["smolquery_memory_cgroup_bytes","{kind=\"slab\"}","12","16392948016"]},{"cells":["smolquery_memory_cgroup_events_total","{kind=\"max\"}","12","131000"]},{"cells":["smolquery_memory_cgroup_events_total","{kind=\"oom_kill\"}","12","0"]},{"cells":["smolquery_memory_cgroup_limit_bytes","","12","0"]},{"cells":["smolquery_memory_cgroup_peak_bytes","","12","440711086080"]},{"cells":["smolquery_memory_rss_bytes","","12","717681815552"]},{"cells":["smolquery_memory_rss_peak_bytes","","12","351898005504"]},{"cells":["smolquery_query_burst_wait_ms_total","","1","0"]},{"cells":["smolquery_query_engine_microseconds_total","{source=\"cold\"}","1","0"]},{"cells":["smolquery_query_engine_microseconds_total","{source=\"warm\"}","3","8815"]},{"cells":["smolquery_query_engine_probe_microseconds_total","{outcome=\"ok\"}","3","6438996"]},{"cells":["smolquery_query_engine_probes_total","{outcome=\"ok\"}","3","310"]},{"cells":["smolquery_query_engines_total","{source=\"cold\"}","1","0"]},{"cells":["smolquery_query_engines_total","{source=\"warm\"}","3","98"]},{"cells":["smolquery_query_file_cache_bytes","","3","3796863647"]},{"cells":["smolquery_query_file_cache_jobs_total","{decision=\"bypassed\"}","1","0"]},{"cells":["smolquery_query_file_cache_jobs_total","{decision=\"used\"}","3","98"]},{"cells":["smolquery_query_file_cache_shards_total","{decision=\"bypassed\"}","3","0"]},{"cells":["smolquery_query_file_cache_shards_total","{decision=\"used\"}","3","0"]},{"cells":["smolquery_query_scatter_burst_total","","1","0"]},{"cells":["smolquery_query_scatter_partial_bytes_total","","3","0"]},{"cells":["smolquery_query_scatter_peers_total","","3","0"]},{"cells":["smolquery_query_scatter_shards_total","","3","0"]},{"cells":["smolquery_query_scattered_total","","3","0"]},{"cells":["smolquery_s3_request_bytes_total","{op=\"put\"}","6","10218519987"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"delete\",le=\"+Inf\"}","1","0"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"delete\",le=\"1000000\"}","1","0"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"delete\",le=\"250000\"}","1","0"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"delete\",le=\"50000\"}","1","0"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"delete\",le=\"5000000\"}","1","0"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"head\",le=\"+Inf\"}","1","0"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"head\",le=\"1000000\"}","1","0"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"head\",le=\"250000\"}","1","0"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"head\",le=\"50000\"}","1","0"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"head\",le=\"5000000\"}","1","0"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"list\",le=\"+Inf\"}","6","585"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"list\",le=\"1000000\"}","6","584"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"list\",le=\"250000\"}","6","363"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"list\",le=\"50000\"}","5","0"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"list\",le=\"5000000\"}","6","585"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"put\",le=\"+Inf\"}","6","899"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"put\",le=\"1000000\"}","6","890"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"put\",le=\"250000\"}","3","639"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"put\",le=\"50000\"}","3","273"]},{"cells":["smolquery_s3_request_microseconds_bucket","{op=\"put\",le=\"5000000\"}","6","898"]},{"cells":["smolquery_s3_request_microseconds_total","{op=\"delete\"}","1","0"]},{"cells":["smolquery_s3_request_microseconds_total","{op=\"head\"}","1","0"]},{"cells":["smolquery_s3_request_microseconds_total","{op=\"list\"}","6","156431781"]},{"cells":["smolquery_s3_request_microseconds_total","{op=\"put\"}","6","171304720"]},{"cells":["smolquery_s3_requests_total","{op=\"delete\",class=\"2xx\"}","1","0"]},{"cells":["smolquery_s3_requests_total","{op=\"head\",class=\"2xx\"}","1","0"]},{"cells":["smolquery_s3_requests_total","{op=\"list\",class=\"2xx\"}","6","585"]},{"cells":["smolquery_s3_requests_total","{op=\"put\",class=\"2xx\"}","6","899"]},{"cells":["smolquery_s3_requests_total","{op=\"put\",class=\"4xx\"}","1","0"]},{"cells":["smolquery_seal_claim_failures_total","","2","3662"]},{"cells":["smolquery_seal_segment_bytes_total","","3","7791638075"]},{"cells":["smolquery_seal_segment_rows_total","","3","146287347"]},{"cells":["smolquery_storage_shape_info","{store=\"Smolquery.Segments.Store.S3\",compression=\"zstd\",seal_row_group_size=\"100000\",seal_row_group_bytes=\"unset\",seal_data_page_bytes=\"unset\",max_concurrent_seals=\"4\",seal_backoff_base_ms=\"30000\",seal_backoff_max_ms=\"600000\",merge_engine_memory_limit=\"3584MiB\",compact_engine_memory_limit=\"1536MiB\",compact_engine_threads=\"1\",merge_inputs_per_call=\"12\",merge_copy_timeout_ms=\"300000\",merge_staging_timeout_ms=\"120000\",merge_describe_timeout_ms=\"120000\"}","3","0"]},{"cells":["smolquery_victoriametrics_query_microseconds_total","{phase=\"evaluate\"}","3","0"]},{"cells":["smolquery_victoriametrics_query_microseconds_total","{phase=\"fetch\"}","3","0"]},{"cells":["smolquery_victoriametrics_query_samples_total","","3","0"]},{"cells":["smolquery_victoriametrics_query_series_total","","3","0"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"query\",le=\"+Inf\"}","3","0"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"query\",le=\"1000000\"}","3","0"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"query\",le=\"10000000\"}","3","0"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"query\",le=\"1500000\"}","3","0"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"query\",le=\"15000000\"}","3","0"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"query\",le=\"2000000\"}","3","0"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"query\",le=\"20000000\"}","3","0"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"query\",le=\"3000000\"}","3","0"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"query\",le=\"30000000\"}","3","0"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"query\",le=\"500000\"}","3","0"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"query\",le=\"5000000\"}","3","0"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"query\",le=\"60000000\"}","3","0"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"query\",le=\"750000\"}","3","0"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"query\",le=\"7500000\"}","3","0"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"write\",le=\"+Inf\"}","3","2468"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"write\",le=\"100000\"}","3","1224"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"write\",le=\"1000000\"}","3","2468"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"write\",le=\"10000000\"}","3","2468"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"write\",le=\"25000\"}","3","1224"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"write\",le=\"250000\"}","3","1224"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"write\",le=\"2500000\"}","3","2468"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"write\",le=\"5000\"}","3","1224"]},{"cells":["smolquery_victoriametrics_request_microseconds_bucket","{kind=\"write\",le=\"500000\"}","3","2444"]},{"cells":["smolquery_victoriametrics_request_microseconds_total","{kind=\"query\"}","3","0"]},{"cells":["smolquery_victoriametrics_request_microseconds_total","{kind=\"write\"}","3","401366108"]},{"cells":["smolquery_victoriametrics_requests_total","{class=\"2xx\"}","6","2468"]},{"cells":["smolquery_victoriametrics_requests_total","{class=\"5xx\"}","3","0"]},{"cells":["smolquery_victoriametrics_samples_total","{result=\"nan\"}","3","104"]},{"cells":["smolquery_victoriametrics_samples_total","{result=\"written\"}","3","265747"]}],"kind":"table"}],"title":"Counters this report does not cover yet","eyebrow":"09 · not charted","intro":"Every metric in the database that no panel above reads. A new counter shows up here rather than disappearing."}]};
+const B = D.buckets, S = D.series, N = B.length;
+const NS = "http://www.w3.org/2000/svg";
+const VOID = new Set(D.voids);
+const RESET = new Set(D.resetMinutes);
+
+const el = (n, a, t) => {
+  const e = document.createElementNS(NS, n);
+  for (const k in a) if (a[k] != null) e.setAttribute(k, a[k]);
+  if (t != null) e.textContent = t;
+  return e;
+};
+const h = (n, a, t) => {
+  const e = document.createElement(n);
+  for (const k in a) if (a[k] != null) e.setAttribute(k, a[k]);
+  if (t != null) e.textContent = t;
+  return e;
+};
+
+const int = v => Math.round(v).toLocaleString("en-US");
+const short = v => Math.abs(v) >= 1e6 ? +(v / 1e6).toFixed(1) + "M"
+  : Math.abs(v) >= 1000 ? +(v / 1000).toFixed(Math.abs(v) < 10000 ? 1 : 0) + "k"
+  : +v.toFixed(v < 10 && v % 1 ? 1 : 0) + "";
+
+const FMT = {
+  ms: { ax: v => v >= 1000 ? +(v / 1000).toFixed(2) + "s" : short(v), tip: v => v >= 1000 ? (v / 1000).toFixed(2) + " s" : v.toFixed(v < 10 ? 2 : 0) + " ms" },
+  s: { ax: v => short(v) + "s", tip: v => v.toFixed(v < 10 ? 2 : 1) + " s" },
+  rows: { ax: short, tip: v => int(v) + " rows/s" },
+  req: { ax: short, tip: v => int(v) + " req" },
+  int: { ax: short, tip: int },
+  num: { ax: short, tip: v => (v % 1 ? v.toFixed(1) : int(v)) }
+};
+
+const charts = [];
+const tt = document.getElementById("tt");
+
+/* ---------------------------------------------------------------- charts */
+
+function mount(host, spec) {
+  const inst = { host, spec, hover: () => {} };
+  charts.push(inst);
+  const draw = () => {
+    host.textContent = "";
+    host.appendChild(render(Math.max(320, host.clientWidth), spec, inst));
+  };
+  draw();
+  new ResizeObserver(() => { clearTimeout(inst.t); inst.t = setTimeout(draw, 60); }).observe(host);
+  wire(inst);
+  return inst;
+}
+
+function render(W, spec, inst) {
+  const wide = spec.wide !== false;
+  const P = wide ? { l: 60, r: spec.type === "line" ? 92 : 22, t: 16, b: 30 }
+    : { l: 48, r: 16, t: 16, b: 30 };
+  const H = spec.h || 232;
+  const pw = W - P.l - P.r, ph = H - P.t - P.b;
+  const bw = pw / N, cx = i => P.l + (i + 0.5) * bw;
+  const cols = spec.series.map(s => S[s.key] || new Array(N).fill(null));
+  const fmt = FMT[spec.fmt] || FMT.num;
+
+  let vmax = 0;
+  if (spec.type === "stack" || spec.type === "sbars") {
+    for (let i = 0; i < N; i++) { let a = 0; for (const c of cols) a += c[i] || 0; if (a > vmax) vmax = a; }
+  } else {
+    for (const c of cols) for (const v of c) if (v != null && v > vmax) vmax = v;
+  }
+  const tk = ticks(vmax), ymax = tk[tk.length - 1];
+  const y = v => P.t + ph - (v / ymax) * ph;
+
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": spec.aria || spec.title });
+
+  // unsampled buckets
+  let run = null;
+  for (let i = 0; i <= N; i++) {
+    if (i < N && VOID.has(i)) { if (run == null) run = i; continue; }
+    if (run != null) {
+      svg.appendChild(el("rect", { x: cx(run) - bw / 2, y: P.t, width: bw * (i - run), height: ph, style: "fill:var(--void)" }));
+      if (i - run >= 2) {
+        svg.appendChild(el("text", {
+          x: cx((run + i - 1) / 2), y: P.t + 12, "text-anchor": "middle",
+          style: "fill:var(--ink-3);font:500 9.5px 'IBM Plex Mono',monospace;letter-spacing:.09em"
+        }, "NO SCRAPE"));
+      }
+      run = null;
+    }
+  }
+
+  for (const t of tk) {
+    svg.appendChild(el("line", { x1: P.l, x2: W - P.r, y1: y(t), y2: y(t), style: `stroke:var(--${t === 0 ? "axis" : "grid"});stroke-width:1` }));
+    svg.appendChild(el("text", { x: P.l - 9, y: y(t) + 3.5, "text-anchor": "end", style: "fill:var(--ink-3);font:400 10.5px 'IBM Plex Mono',monospace" }, fmt.ax(t)));
+  }
+
+  const every = Math.ceil(46 / bw);
+  for (let i = 0; i < N; i++) {
+    if (i % every) continue;
+    svg.appendChild(el("text", { x: cx(i), y: H - 10, "text-anchor": "middle", style: "fill:var(--ink-3);font:400 10.5px 'IBM Plex Mono',monospace" }, B[i]));
+  }
+
+  const marks = el("g");
+  svg.appendChild(marks);
+  const ok = i => (spec.valid ? S[spec.valid] && S[spec.valid][i] != null : true);
+
+  if (spec.type === "stack") {
+    const base = new Array(N).fill(0);
+    spec.series.forEach((s, si) => {
+      const c = cols[si];
+      for (const seg of runs(i => ok(i) && c[i] != null)) {
+        if (seg.length < 2) continue;
+        let d = seg.map((i, k) => (k ? "L" : "M") + cx(i).toFixed(1) + " " + y(base[i] + c[i]).toFixed(1)).join("");
+        for (let k = seg.length - 1; k >= 0; k--) d += "L" + cx(seg[k]).toFixed(1) + " " + y(base[seg[k]]).toFixed(1);
+        marks.appendChild(el("path", { d: d + "Z", style: `fill:var(--${s.c});fill-opacity:.9;stroke:var(--surface);stroke-width:2;stroke-linejoin:round` }));
+      }
+      for (let i = 0; i < N; i++) base[i] += c[i] || 0;
+    });
+  } else if (spec.type === "sbars") {
+    const w = Math.min(26, bw * 0.6);
+    for (let i = 0; i < N; i++) {
+      let acc = 0;
+      if (!cols.some(c => c[i] != null)) continue;
+      spec.series.forEach((s, si) => {
+        const v = cols[si][i];
+        if (v == null || v <= 0) return;
+        const yt = y(acc + v), yb = y(acc);
+        marks.appendChild(el("rect", { x: cx(i) - w / 2, y: yt, width: w, height: Math.max(1.5, yb - yt - 1.5), rx: 2, style: `fill:var(--${s.c})` }));
+        acc += v;
+      });
+    }
+  } else if (spec.type === "bars") {
+    const n = spec.series.length;
+    const gw = Math.min(30, bw * 0.68), w = Math.max(2, gw / n - (n > 1 ? 2 : 0));
+    spec.series.forEach((s, si) => {
+      const c = cols[si];
+      for (let i = 0; i < N; i++) {
+        if (c[i] == null || c[i] <= 0) continue;
+        const x = cx(i) - gw / 2 + si * (gw / n);
+        marks.appendChild(el("rect", { x, y: y(c[i]), width: w, height: Math.max(1.5, ph - (y(c[i]) - P.t)), rx: 2, style: `fill:var(--${s.c})` }));
+      }
+    });
+  } else {
+    const ends = [];
+    spec.series.forEach((s, si) => {
+      const c = cols[si];
+      const segs = runs(i => c[i] != null);
+      for (const seg of segs) {
+        if (seg.length === 1) { marks.appendChild(el("circle", { cx: cx(seg[0]), cy: y(c[seg[0]]), r: 3.2, style: `fill:var(--${s.c})` })); continue; }
+        marks.appendChild(el("path", {
+          d: seg.map((i, k) => (k ? "L" : "M") + cx(i).toFixed(1) + " " + y(c[i]).toFixed(1)).join(""),
+          style: `fill:none;stroke:var(--${s.c});stroke-width:2;stroke-linejoin:round;stroke-linecap:round`
+        }));
+      }
+      const tail = segs[segs.length - 1];
+      if (tail && P.r > 40) ends.push({ s, i: tail[tail.length - 1], y: y(c[tail[tail.length - 1]]) });
+    });
+    ends.sort((a, b) => a.y - b.y);
+    for (let k = 1; k < ends.length; k++) if (ends[k].y - ends[k - 1].y < 13) ends[k].y = ends[k - 1].y + 13;
+    for (const e of ends) {
+      marks.appendChild(el("circle", { cx: cx(e.i), cy: y(S[e.s.key][e.i]), r: 3.4, style: `fill:var(--${e.s.c});stroke:var(--surface);stroke-width:2` }));
+      marks.appendChild(el("text", { x: Math.min(cx(e.i) + 9, W - P.r + 6), y: e.y + 3.5, style: "fill:var(--ink-2);font:500 11px 'IBM Plex Sans',sans-serif" }, e.s.name));
+    }
+  }
+
+  const cross = el("line", { y1: P.t, y2: P.t + ph, style: "stroke:var(--ink-3);stroke-width:1;stroke-dasharray:3 3;opacity:0" });
+  const dots = el("g", { style: "opacity:0" });
+  svg.appendChild(cross);
+  svg.appendChild(dots);
+
+  inst.hover = i => {
+    if (i == null) { cross.style.opacity = 0; dots.style.opacity = 0; return; }
+    cross.setAttribute("x1", cx(i));
+    cross.setAttribute("x2", cx(i));
+    cross.style.opacity = 0.7;
+    dots.textContent = "";
+    if (spec.type === "line") {
+      spec.series.forEach((s, si) => {
+        const v = cols[si][i];
+        if (v != null) dots.appendChild(el("circle", { cx: cx(i), cy: y(v), r: 4, style: `fill:var(--${s.c});stroke:var(--surface);stroke-width:2` }));
+      });
+    }
+    dots.style.opacity = 1;
+  };
+  inst.idx = px => Math.max(0, Math.min(N - 1, Math.floor((px - P.l) / bw)));
+  return svg;
+
+  function runs(pred) {
+    const out = [];
+    let cur = [];
+    for (let i = 0; i < N; i++) {
+      if (pred(i)) cur.push(i);
+      else if (cur.length) { out.push(cur); cur = []; }
+    }
+    if (cur.length) out.push(cur);
+    return out;
+  }
+}
+
+function ticks(max) {
+  if (!(max > 0)) return [0, 1];
+  const raw = max / 4, p = Math.pow(10, Math.floor(Math.log10(raw)));
+  const step = [1, 2, 2.5, 5, 10].find(x => x * p >= raw - 1e-9) * p;
+  const out = [];
+  for (let v = 0; v <= max * 1.0001 + step * 0.001; v += step) out.push(+v.toFixed(10));
+  if (out[out.length - 1] < max) out.push(+(out[out.length - 1] + step).toFixed(10));
+  return out;
+}
+
+function tip(i, spec) {
+  const fmt = FMT[spec.fmt] || FMT.num;
+  let s = `<div class="t">${B[i]}${D.phases[i] ? " &middot; " + D.phases[i] : ""}</div>`;
+  let any = false;
+  for (const q of spec.series) {
+    const v = (S[q.key] || [])[i];
+    s += `<div class="r"><span><i style="background:var(--${q.c})"></i>${q.name}</span><b>${v == null ? "&mdash;" : fmt.tip(v)}</b></div>`;
+    if (v != null) any = true;
+  }
+  if (!any) s += `<div class="r" style="color:var(--ink-3)">no usable sample</div>`;
+  return s;
+}
+
+function wire(inst) {
+  const move = ev => {
+    const r = inst.host.getBoundingClientRect();
+    const svg = inst.host.querySelector("svg");
+    if (!svg) return;
+    const i = inst.idx((ev.clientX - r.left) * (svg.viewBox.baseVal.width / r.width));
+    for (const c of charts) if (c.spec.wide !== false) c.hover(i);
+    if (inst.spec.wide === false) inst.hover(i);
+    tt.innerHTML = tip(i, inst.spec);
+    tt.style.opacity = 1;
+    tt.style.left = Math.min(window.innerWidth - tt.offsetWidth - 12, Math.max(8, ev.clientX + 16)) + "px";
+    tt.style.top = Math.min(window.innerHeight - tt.offsetHeight - 12, Math.max(8, ev.clientY - tt.offsetHeight - 14)) + "px";
+  };
+  inst.host.addEventListener("pointermove", move);
+  inst.host.addEventListener("pointerleave", () => { for (const c of charts) c.hover(null); tt.style.opacity = 0; });
+}
+
+/* ------------------------------------------------------------- liveness */
+
+function strip(host) {
+  const draw = () => {
+    const W = Math.max(320, host.clientWidth), rows = D.liveness;
+    const P = { l: 60, r: 22 }, rh = 19, H = rows.length * rh + 20;
+    const pw = W - P.l - P.r, bw = pw / N, cx = i => P.l + (i + 0.5) * bw;
+    host.textContent = "";
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": "Pods answering a scrape per tier, and counter resets" });
+    rows.forEach((row, r) => {
+      const yy = 4 + r * rh;
+      svg.appendChild(el("text", { x: P.l - 9, y: yy + 11, "text-anchor": "end", style: "fill:var(--ink-3);font:400 10.5px 'IBM Plex Mono',monospace" }, row.tier));
+      for (let i = 0; i < N; i++) {
+        const n = row.counts[i], w = Math.min(24, bw * 0.62);
+        const tone = n === 0 ? "crit" : n === row.total ? "good" : "warn";
+        svg.appendChild(el("rect", { x: cx(i) - w / 2, y: yy + 1, width: w, height: 13, rx: 2, style: `fill:var(--${tone});fill-opacity:.82` }));
+        svg.appendChild(el("text", { x: cx(i), y: yy + 11, "text-anchor": "middle", style: "fill:var(--surface);font:600 9px 'IBM Plex Mono',monospace" }, String(n)));
+      }
+    });
+    const yy = 4 + rows.length * rh;
+    for (let i = 0; i < N; i++) {
+      if (!RESET.has(B[i])) continue;
+      svg.appendChild(el("path", { d: `M${cx(i)} ${yy + 2} l4.5 8 h-9 Z`, style: "fill:var(--crit)" }));
+    }
+    svg.appendChild(el("text", { x: P.l - 9, y: yy + 11, "text-anchor": "end", style: "fill:var(--ink-3);font:400 10.5px 'IBM Plex Mono',monospace" }, "reset"));
+    host.appendChild(svg);
+  };
+  draw();
+  new ResizeObserver(() => { clearTimeout(host._t); host._t = setTimeout(draw, 60); }).observe(host);
+}
+
+/* ---------------------------------------------------------------- build */
+
+function legendOf(series) {
+  const box = h("div", { class: "legend" });
+  for (const s of series) {
+    const sp = h("span", { class: "lg" });
+    sp.appendChild(h("i", { class: s.line ? "ln" : "", style: `background:var(--${s.c})` }));
+    sp.appendChild(document.createTextNode(s.name));
+    box.appendChild(sp);
+  }
+  return box;
+}
+
+function panelOf(p) {
+  const box = h("div", { class: "panel" });
+  const hd = h("div", { class: "panel-hd" });
+  hd.appendChild(h("h3", {}, p.title));
+  if (p.unit) hd.appendChild(h("span", { class: "unit" }, p.unit));
+  box.appendChild(hd);
+
+  const c = p.chart;
+  const present = c && c.series.some(s => (S[s.key] || []).some(v => v != null));
+  if (!present) {
+    box.appendChild(h("div", { class: "empty" }, p.emptyNote || "No counter moved during this run."));
+  } else {
+    if (c.series.length > 1) box.appendChild(legendOf(c.series.map(s => ({ ...s, line: c.type === "line" }))));
+    const plot = h("div", { class: "plot" });
+    box.appendChild(plot);
+    mount(plot, { ...c, title: p.title });
+  }
+  if (p.note) box.appendChild(h("p", { class: "pnote" }, p.note));
+  return box;
+}
+
+function tableOf(t) {
+  const box = h("div", { class: "tw" });
+  let s = "<table><thead><tr>" + t.columns.map(c => `<th>${c}</th>`).join("") + "</tr></thead><tbody>";
+  for (const row of t.rows) {
+    if (row.group) { s += `<tr class="grp"><td colspan="${t.columns.length}">${row.group}</td></tr>`; continue; }
+    s += "<tr>" + row.cells.map((c, k) => {
+      const v = c == null || c === "" ? "&mdash;" : c;
+      const cls = c == null || c === "" ? "dim" : (row.wrap && k === row.wrap ? "wrap-cell" : "");
+      return `<td class="${cls}">${v}</td>`;
+    }).join("") + "</tr>";
+  }
+  box.innerHTML = s + "</tbody></table>";
+  return box;
+}
+
+function blockOf(b) {
+  if (b.kind === "panel") return panelOf(b);
+  if (b.kind === "duo") {
+    const d = h("div", { class: "duo" });
+    for (const p of b.panels) d.appendChild(panelOf(p));
+    return d;
+  }
+  if (b.kind === "table") {
+    const box = h("div", {});
+    box.style.display = "flex";
+    box.style.flexDirection = "column";
+    box.style.gap = "10px";
+    if (b.title) box.appendChild(h("h3", {}, b.title));
+    box.appendChild(tableOf(b));
+    if (b.note) box.appendChild(h("p", { class: "pnote", style: "padding:0" }, b.note));
+    return box;
+  }
+  if (b.kind === "callout") {
+    const box = h("div", { class: "callout" + (b.tone === "crit" ? " crit" : "") });
+    if (b.k) box.appendChild(h("div", { class: "k" }, b.k));
+    const p = h("p");
+    p.innerHTML = b.text;
+    box.appendChild(p);
+    return box;
+  }
+  if (b.kind === "strip") {
+    const box = h("div", { class: "panel" });
+    const hd = h("div", { class: "panel-hd" });
+    hd.appendChild(h("h3", {}, b.title));
+    if (b.unit) hd.appendChild(h("span", { class: "unit" }, b.unit));
+    box.appendChild(hd);
+    const plot = h("div", { class: "plot" });
+    box.appendChild(plot);
+    strip(plot);
+    if (b.note) box.appendChild(h("p", { class: "pnote" }, b.note));
+    return box;
+  }
+  const p = h("p");
+  p.innerHTML = b.text;
+  return p;
+}
+
+const root = document.getElementById("sections");
+for (const sec of D.sections) {
+  const s = h("section", { id: sec.id });
+  const head = h("div", { class: "shead" });
+  if (sec.eyebrow) head.appendChild(h("div", { class: "eyebrow" }, sec.eyebrow));
+  head.appendChild(h("h2", {}, sec.title));
+  if (sec.intro) { const p = h("p"); p.innerHTML = sec.intro; head.appendChild(p); }
+  s.appendChild(head);
+  for (const b of sec.blocks) s.appendChild(blockOf(b));
+  root.appendChild(s);
+}
+
+</script>
+</body>
+</html>

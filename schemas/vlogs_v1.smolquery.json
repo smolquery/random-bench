@@ -1,0 +1,253 @@
+{
+  "id": "vlogs_v1",
+  "schema": [
+    {
+      "name": "timestamp",
+      "type": "TIMESTAMP"
+    },
+    {
+      "name": "host",
+      "type": "STRING"
+    },
+    {
+      "name": "app",
+      "type": "STRING"
+    },
+    {
+      "name": "level",
+      "type": "STRING"
+    },
+    {
+      "name": "message",
+      "type": "STRING"
+    },
+    {
+      "name": "zone",
+      "type": "STRING"
+    },
+    {
+      "name": "instance_type",
+      "type": "STRING"
+    },
+    {
+      "name": "os_image",
+      "type": "STRING"
+    },
+    {
+      "name": "namespace",
+      "type": "STRING"
+    },
+    {
+      "name": "team",
+      "type": "STRING"
+    },
+    {
+      "name": "env",
+      "type": "STRING"
+    },
+    {
+      "name": "tier",
+      "type": "STRING"
+    },
+    {
+      "name": "component",
+      "type": "STRING"
+    },
+    {
+      "name": "part_of",
+      "type": "STRING"
+    },
+    {
+      "name": "managed_by",
+      "type": "STRING"
+    },
+    {
+      "name": "release_channel",
+      "type": "STRING"
+    },
+    {
+      "name": "app_version",
+      "type": "STRING"
+    },
+    {
+      "name": "image_digest",
+      "type": "STRING"
+    },
+    {
+      "name": "build_id",
+      "type": "STRING"
+    },
+    {
+      "name": "vcs_branch",
+      "type": "STRING"
+    },
+    {
+      "name": "runtime",
+      "type": "STRING"
+    },
+    {
+      "name": "sdk_version",
+      "type": "STRING"
+    },
+    {
+      "name": "service_mesh",
+      "type": "STRING"
+    },
+    {
+      "name": "ingress_class",
+      "type": "STRING"
+    },
+    {
+      "name": "autoscaler",
+      "type": "STRING"
+    },
+    {
+      "name": "replicas",
+      "type": "INT64"
+    },
+    {
+      "name": "cpu_request",
+      "type": "STRING"
+    },
+    {
+      "name": "memory_request",
+      "type": "STRING"
+    },
+    {
+      "name": "storage_class",
+      "type": "STRING"
+    },
+    {
+      "name": "priority_class",
+      "type": "STRING"
+    },
+    {
+      "name": "qos_class",
+      "type": "STRING"
+    },
+    {
+      "name": "security_profile",
+      "type": "STRING"
+    },
+    {
+      "name": "service_account",
+      "type": "STRING"
+    },
+    {
+      "name": "cost_center",
+      "type": "STRING"
+    },
+    {
+      "name": "criticality",
+      "type": "STRING"
+    },
+    {
+      "name": "sla_tier",
+      "type": "STRING"
+    },
+    {
+      "name": "on_call",
+      "type": "STRING"
+    },
+    {
+      "name": "kafka_topic",
+      "type": "STRING"
+    },
+    {
+      "name": "db_pool",
+      "type": "STRING"
+    },
+    {
+      "name": "cache_backend",
+      "type": "STRING"
+    },
+    {
+      "name": "queue_backend",
+      "type": "STRING"
+    },
+    {
+      "name": "feature_set",
+      "type": "STRING"
+    },
+    {
+      "name": "tenant_mode",
+      "type": "STRING"
+    },
+    {
+      "name": "backup_policy",
+      "type": "STRING"
+    },
+    {
+      "name": "method",
+      "type": "STRING"
+    },
+    {
+      "name": "protocol",
+      "type": "STRING"
+    },
+    {
+      "name": "status",
+      "type": "INT64"
+    },
+    {
+      "name": "cache_status",
+      "type": "STRING"
+    },
+    {
+      "name": "retries",
+      "type": "INT64"
+    },
+    {
+      "name": "tls_version",
+      "type": "STRING"
+    },
+    {
+      "name": "compression",
+      "type": "STRING"
+    },
+    {
+      "name": "sampled",
+      "type": "STRING"
+    },
+    {
+      "name": "content_type",
+      "type": "STRING"
+    },
+    {
+      "name": "path",
+      "type": "STRING"
+    },
+    {
+      "name": "ip",
+      "type": "STRING"
+    },
+    {
+      "name": "user_agent",
+      "type": "STRING"
+    },
+    {
+      "name": "user_id",
+      "type": "STRING"
+    },
+    {
+      "name": "referer",
+      "type": "STRING"
+    },
+    {
+      "name": "bytes_sent",
+      "type": "INT64"
+    },
+    {
+      "name": "request_id",
+      "type": "STRING"
+    },
+    {
+      "name": "span_id",
+      "type": "STRING"
+    },
+    {
+      "name": "duration_ms",
+      "type": "INT64"
+    }
+  ]
+}

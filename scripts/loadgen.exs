@@ -34,8 +34,11 @@ defmodule Bench.Loadgen do
       ["sweep"] -> sweep()
       ["fetch"] -> fetch()
       ["down"] -> down()
+      ["vlogs-up"] -> vlogs_up()
+      ["vlogs-down"] -> vlogs_down()
+      ["vlogs-report", path] -> vlogs_report(path)
       ["ssh"] -> session()
-      _ -> Bench.fatal!("usage: loadgen.exs <up|status|sweep|fetch|down|ssh>")
+      _ -> Bench.fatal!("usage: loadgen.exs <up|status|sweep|fetch|down|ssh|vlogs-up|vlogs-down>")
     end
   end
 
@@ -125,12 +128,12 @@ defmodule Bench.Loadgen do
     end
   end
 
-  defp instance_id do
+  defp instance_id(tag \\ @tag) do
     aws!([
       "ec2",
       "describe-instances",
       "--filters",
-      "Name=tag:Name,Values=#{@tag}",
+      "Name=tag:Name,Values=#{tag}",
       "Name=instance-state-name,Values=pending,running",
       "--query",
       "Reservations[0].Instances[0].InstanceId",
@@ -261,7 +264,7 @@ defmodule Bench.Loadgen do
 
   def up do
     case instance_id() do
-      nil -> launch()
+      nil -> launch(@tag, instance_type(), [root_device(root_gib())])
       id -> IO.puts("#{@tag} already running: #{id}")
     end
 
@@ -270,7 +273,12 @@ defmodule Bench.Loadgen do
     status()
   end
 
-  defp launch do
+  defp root_device(gib) do
+    "DeviceName=/dev/xvda,Ebs={VolumeSize=#{gib},VolumeType=gp3," <>
+      "Throughput=500,DeleteOnTermination=true}"
+  end
+
+  defp launch(tag, type, block_devices) do
     ensure_instance_profile()
     config = vpc_config()
     subnet = Bench.env("LOADGEN_SUBNET", hd(config["subnets"]))
@@ -288,34 +296,37 @@ defmodule Bench.Loadgen do
         "text"
       ])
 
-    IO.puts("launching #{instance_type()} in #{subnet} with sg #{sg}, ami #{ami}")
+    IO.puts("launching #{tag} as #{type} in #{subnet} with sg #{sg}, ami #{ami}")
 
     id =
-      aws!([
-        "ec2",
-        "run-instances",
-        "--image-id",
-        ami,
-        "--instance-type",
-        instance_type(),
-        "--subnet-id",
-        subnet,
-        "--security-group-ids",
-        sg,
-        "--iam-instance-profile",
-        "Name=#{@role}",
-        "--block-device-mappings",
-        "DeviceName=/dev/xvda,Ebs={VolumeSize=#{root_gib()},VolumeType=gp3," <>
-          "Throughput=500,DeleteOnTermination=true}",
-        "--metadata-options",
-        "HttpTokens=required,HttpEndpoint=enabled",
-        "--tag-specifications",
-        "ResourceType=instance,Tags=[{Key=Name,Value=#{@tag}}]",
-        "--query",
-        "Instances[0].InstanceId",
-        "--output",
-        "text"
-      ])
+      aws!(
+        [
+          "ec2",
+          "run-instances",
+          "--image-id",
+          ami,
+          "--instance-type",
+          type,
+          "--subnet-id",
+          subnet,
+          "--security-group-ids",
+          sg,
+          "--iam-instance-profile",
+          "Name=#{@role}",
+          "--block-device-mappings"
+        ] ++
+          block_devices ++
+          [
+            "--metadata-options",
+            "HttpTokens=required,HttpEndpoint=enabled",
+            "--tag-specifications",
+            "ResourceType=instance,Tags=[{Key=Name,Value=#{tag}}]",
+            "--query",
+            "Instances[0].InstanceId",
+            "--output",
+            "text"
+          ]
+      )
 
     IO.puts("launched #{id}, waiting for it to run")
     aws!(["ec2", "wait", "instance-running", "--instance-ids", id])
@@ -535,7 +546,7 @@ defmodule Bench.Loadgen do
 
     box? =
       ingest? or "onebrc" in benches or "tail" in benches or "tsbs" in benches or
-        "clickbench" in benches
+        "clickbench" in benches or "vlogs" in benches
 
     pod_ips = api_pod_ips()
     dataset = Bench.Remote.dataset()
@@ -572,6 +583,7 @@ defmodule Bench.Loadgen do
         "onebrc" -> run_onebrc(id, dataset, table, key, watcher)
         "tsbs" -> run_tsbs(id, key, watcher)
         "clickbench" -> run_clickbench(id, dataset, key, watcher)
+        "vlogs" -> run_vlogs(id, dataset, table, key, watcher)
       end
     end)
 
@@ -2586,6 +2598,508 @@ defmodule Bench.Loadgen do
 
     count = results_dir() |> Path.join("*.k6.json") |> Path.wildcard() |> length()
     IO.puts("fetched #{count} k6 results → #{results_dir()}")
+  end
+
+  # ── bench: vlogs ───────────────────────────────────────────────────────────
+
+  @vlogs_tag "smolquery-bench-vlogs"
+  @vlogs_systems ["victorialogs", "smolquery"]
+
+  defp vlogs_instance_type, do: Bench.env("VLOGS_INSTANCE_TYPE", "m6a.2xlarge")
+  defp vlogs_version, do: Bench.env("VLOGS_VERSION", "v1.53.0")
+  defp vlogs_disk_gib, do: Bench.env("VLOGS_DISK_GIB", "500")
+  defp vlogs_disk_mibps, do: Bench.env("VLOGS_DISK_MIBPS", "280")
+  defp vlogs_rate, do: Bench.env_int("VLOGS_RATE", 10_000)
+  defp vlogs_step, do: Bench.env_int("VLOGS_STEP", 10_000)
+  defp vlogs_max, do: Bench.env_int("VLOGS_MAX", 150_000)
+  defp vlogs_interval_s, do: Bench.env_int("VLOGS_INTERVAL_S", 300)
+  defp vlogs_settle_s, do: Bench.env_int("VLOGS_SETTLE_S", 120)
+  defp vlogs_batch_lines, do: Bench.env_int("VLOGS_BATCH_LINES", 2000)
+  defp vlogs_workers, do: Bench.env_int("VLOGS_WORKERS", 32)
+
+  defp vlogs_writer_flags do
+    [
+      "-rate=#{vlogs_rate()}",
+      "-rampStep=#{vlogs_step()}",
+      "-rampInterval=#{vlogs_interval_s()}s",
+      "-rampMax=#{vlogs_max()}",
+      "-dropOnFull=true",
+      "-buffer=400000",
+      "-batchLines=#{vlogs_batch_lines()}",
+      "-workers=#{vlogs_workers()}",
+      "-hosts=125",
+      "-apps=40",
+      "-seed=1"
+    ]
+  end
+
+  @doc """
+  Launches the VictoriaLogs instance for `BENCHES=vlogs` and installs
+  VictoriaLogs on it.
+
+  The default shape copies the reference node of VictoriaMetrics'
+  logs-benchmark: 8 vCPU AMD Milan with 32 GiB (m6a.2xlarge against
+  n2d-standard-8), and a 500 GiB data disk at 280 MiB/s, the write cap of
+  the 500 GiB pd-balanced disk upstream used. The instance wears the node
+  security group, so the load generator reaches port 9428 directly.
+  """
+  def vlogs_up do
+    id =
+      case instance_id(@vlogs_tag) do
+        nil ->
+          launch(@vlogs_tag, vlogs_instance_type(), [
+            root_device(30),
+            "DeviceName=/dev/sdf,Ebs={VolumeSize=#{vlogs_disk_gib()},VolumeType=gp3," <>
+              "Iops=3000,Throughput=#{vlogs_disk_mibps()},DeleteOnTermination=true}"
+          ])
+
+        id ->
+          IO.puts("#{@vlogs_tag} already running: #{id}")
+          id
+      end
+
+    wait_for_ssm(id, 60)
+    IO.puts("installing VictoriaLogs #{vlogs_version()}")
+    IO.puts(run_file!(id, "vl-install.sh", [vlogs_version()]))
+    IO.puts("victorialogs at http://#{private_ip(id)}:9428")
+  end
+
+  @doc "Terminates the VictoriaLogs instance and its data disk."
+  def vlogs_down do
+    case instance_id(@vlogs_tag) do
+      nil ->
+        IO.puts("no #{@vlogs_tag} instance to terminate")
+
+      id ->
+        aws!(["ec2", "terminate-instances", "--instance-ids", id])
+        IO.puts("terminating #{id}")
+    end
+  end
+
+  defp private_ip(id) do
+    aws!([
+      "ec2",
+      "describe-instances",
+      "--instance-ids",
+      id,
+      "--query",
+      "Reservations[0].Instances[0].PrivateIpAddress",
+      "--output",
+      "text"
+    ])
+  end
+
+  defp put_file!(id, file) do
+    payload = Path.join([Bench.root(), "tools/vlogs", file]) |> File.read!() |> Base.encode64()
+
+    run!(id, """
+    set -euo pipefail
+    mkdir -p /opt/vlogs
+    echo '#{payload}' | base64 -d > /opt/vlogs/#{file}
+    """)
+  end
+
+  defp run_file!(id, file, args) do
+    put_file!(id, file)
+    run!(id, "bash /opt/vlogs/#{file} #{Enum.join(args, " ")}")
+  end
+
+  @doc """
+  Rebuilds the summary of a saved `*.vlogs.json` from its raw samples and
+  prints the step table.
+  """
+  def vlogs_report(path) do
+    result = path |> File.read!() |> JSON.decode!()
+
+    summary =
+      vlogs_summary(
+        result["bench_samples"],
+        result["vl_samples"],
+        result["steps"],
+        result["restarts_before"] || %{}
+      )
+
+    File.write!(path, JSON.encode!(Map.put(result, "summary", summary)) <> "\n")
+    IO.puts(vlogs_table(summary))
+  end
+
+  defp run_vlogs(id, dataset, table, key, watcher) do
+    vl_id =
+      instance_id(@vlogs_tag) ||
+        Bench.fatal!("no #{@vlogs_tag} instance. Run: mise run vlogs-up")
+
+    vl_addr = "http://#{private_ip(vl_id)}:9428"
+    sq_addrs = Enum.map_join(api_pod_ips(), "|", &"http://#{&1}:4000")
+
+    sq_query_addrs =
+      Bench.env("VLOGS_QUERY_SERVICE", "smolquery-query")
+      |> endpoint_ips()
+      |> Enum.map_join("|", &"http://#{&1}:4000")
+
+    steps = div(vlogs_max() - vlogs_rate(), vlogs_step()) + 1
+
+    Bench.Remote.setup(table)
+    rows_before = vlogs_count(dataset, table, key)
+
+    IO.puts(
+      "\n== vlogs: #{steps} steps of #{vlogs_interval_s()}s, " <>
+        "#{vlogs_rate()} to #{vlogs_max()} lines/s, #{vlogs_batch_lines()} lines per request"
+    )
+
+    IO.puts("== vlogs: victorialogs #{vl_addr}")
+    IO.puts("== vlogs: smolquery #{sq_addrs}, #{dataset}.#{table} holds #{rows_before} rows")
+    IO.puts("== vlogs: smolquery counts via #{sq_query_addrs}")
+
+    put_file!(vl_id, "vl-sampler.sh")
+    IO.puts(String.trim(run_file!(vl_id, "vl-start.sh", [])))
+
+    push_code(id)
+    put_api_key(key)
+
+    started =
+      run!(id, """
+      cd #{remote_dir()}
+      SMOLQUERY_DATASET=#{dataset} SMOLQUERY_TABLE=#{table} AWS_REGION=#{region()} \
+        bash tools/vlogs/bench-start.sh '#{vl_addr}' '#{sq_addrs}' '#{sq_query_addrs}' #{Enum.join(vlogs_writer_flags(), " ")}
+      """)
+
+    delete_api_key()
+    IO.puts(String.trim(started))
+
+    restarts_before = pod_restarts()
+    bench_file = "#{remote_dir()}/results/vlogs-bench.txt"
+    vl_file = "/opt/vlogs/samples.txt"
+
+    acc =
+      Enum.reduce(0..(steps - 1), %{bench: [], vl: [], steps: []}, fn i, acc ->
+        target = vlogs_rate() + i * vlogs_step()
+        Bench.WatchMetrics.set_phase(watcher, "vlogs-#{target}")
+        anon_task = Task.async(fn -> pod_anon_peaks(vlogs_interval_s()) end)
+        pods = Bench.WatchPods.sample(vlogs_interval_s())
+        anon = Task.await(anon_task, :infinity)
+        bench = acc.bench ++ tail_lines(id, bench_file, length(acc.bench))
+        vl = acc.vl ++ tail_lines(vl_id, vl_file, length(acc.vl))
+
+        step = %{
+          "target" => target,
+          "ended_at" => now_iso(),
+          "pods" => pods,
+          "anon_peak_bytes" => anon,
+          "restarts" => pod_restarts()
+        }
+
+        IO.puts(vlogs_progress(target, bench, vl))
+        %{acc | bench: bench, vl: vl, steps: acc.steps ++ [step]}
+      end)
+
+    Bench.WatchMetrics.set_phase(watcher, "vlogs-settle")
+    run!(id, "systemctl stop vlbench-writer")
+    IO.puts("== vlogs: writer stopped, settling #{vlogs_settle_s()}s")
+    Process.sleep(vlogs_settle_s() * 1000)
+    bench = acc.bench ++ tail_lines(id, bench_file, length(acc.bench))
+    vl = acc.vl ++ tail_lines(vl_id, vl_file, length(acc.vl))
+    run!(id, "bash #{remote_dir()}/tools/vlogs/bench-stop.sh")
+
+    rows_after = vlogs_count(dataset, table, key)
+
+    result = %{
+      "inserted_at" => now_iso(),
+      "upstream" => "VictoriaMetrics/logs-benchmark",
+      "victorialogs" => %{"version" => vlogs_version(), "instance_type" => vlogs_instance_type()},
+      "smolquery" => %{
+        "dataset" => dataset,
+        "table" => table,
+        "rows_before" => rows_before,
+        "rows_after" => rows_after
+      },
+      "config" => %{
+        "rate" => vlogs_rate(),
+        "step" => vlogs_step(),
+        "max" => vlogs_max(),
+        "interval_s" => vlogs_interval_s(),
+        "batch_lines" => vlogs_batch_lines(),
+        "workers" => vlogs_workers(),
+        "writer_flags" => vlogs_writer_flags()
+      },
+      "restarts_before" => restarts_before,
+      "steps" => acc.steps,
+      "bench_samples" => bench,
+      "vl_samples" => vl
+    }
+
+    stamp = DateTime.utc_now() |> Calendar.strftime("%Y%m%dT%H%M%SZ")
+    out = Path.join(results_dir(), "loadgen-vlogs-#{stamp}#{label_suffix()}.vlogs.json")
+    File.write!(out, JSON.encode!(result) <> "\n")
+    summary = vlogs_summary(bench, vl, acc.steps, restarts_before)
+    File.write!(out, JSON.encode!(Map.put(result, "summary", summary)) <> "\n")
+    IO.puts("\n" <> vlogs_table(summary))
+    IO.puts("== vlogs → #{out}")
+  end
+
+  defp vlogs_count(dataset, table, key) do
+    url = "#{Bench.Remote.base_url()}/v1/queries"
+    time_query(url, key, "SELECT count(*) AS n FROM #{dataset}.#{table}").rows
+  end
+
+  defp tail_lines(id, file, skip) do
+    id
+    |> run!("tail -n +#{skip + 1} #{file} 2>/dev/null || true")
+    |> String.split("\n", trim: true)
+  end
+
+  defp pod_restarts do
+    args = [
+      "get",
+      "pods",
+      "-l",
+      Bench.env("POD_SELECTOR", "cluster=smolquery"),
+      "-o",
+      "jsonpath={range .items[*]}{.metadata.name}={.status.containerStatuses[0].restartCount} {end}"
+    ]
+
+    case Bench.Kube.cmd(args) do
+      {out, 0} ->
+        out
+        |> String.split(~r/\s+/, trim: true)
+        |> Map.new(fn pair ->
+          [pod, n] = String.split(pair, "=", parts: 2)
+          {pod, String.to_integer(n)}
+        end)
+
+      _ ->
+        %{}
+    end
+  end
+
+  defp pod_anon_peaks(seconds) do
+    deadline = System.monotonic_time(:second) + seconds
+    pods = Bench.WatchPods.pods()
+    anon_loop(pods, deadline, %{})
+  end
+
+  defp anon_loop(pods, deadline, peaks) do
+    peaks =
+      pods
+      |> Task.async_stream(&{&1, pod_anon(&1)}, timeout: 30_000, on_timeout: :kill_task)
+      |> Enum.reduce(peaks, fn
+        {:ok, {pod, n}}, acc when is_integer(n) -> Map.update(acc, pod, n, &max(&1, n))
+        _, acc -> acc
+      end)
+
+    if System.monotonic_time(:second) + 15 < deadline do
+      Process.sleep(15_000)
+      anon_loop(pods, deadline, peaks)
+    else
+      peaks
+    end
+  end
+
+  defp pod_anon(pod) do
+    script = "awk '/^anon /{print $2}' /sys/fs/cgroup/memory.stat"
+
+    case Bench.Kube.cmd(["exec", pod, "-c", "smolquery", "--", "sh", "-c", script]) do
+      {out, 0} ->
+        case Integer.parse(String.trim(out)) do
+          {n, _} -> n
+          :error -> nil
+        end
+
+      _ ->
+        nil
+    end
+  end
+
+  defp parse_sample(line) do
+    [t | pairs] = String.split(line)
+
+    pairs
+    |> Enum.flat_map(fn pair ->
+      with [k, v] <- String.split(pair, "=", parts: 2),
+           {n, _} <- Float.parse(v) do
+        [{k, n}]
+      else
+        _ -> []
+      end
+    end)
+    |> Map.new()
+    |> Map.put("t", String.to_float(t))
+  end
+
+  defp vlogs_progress(target, bench, vl) do
+    b = bench |> List.last() |> then(&if(&1, do: parse_sample(&1), else: %{}))
+    v = vl |> List.last() |> then(&if(&1, do: parse_sample(&1), else: %{}))
+
+    stored =
+      Enum.map_join(@vlogs_systems, ", ", fn s ->
+        "#{s} stored #{trunc(Map.get(b, "stored_rows:#{s}", 0))} " <>
+          "dropped #{trunc(Map.get(b, "lines_dropped_total:#{s}", 0))} " <>
+          "errors #{trunc(Map.get(b, "send_line_errors_total:#{s}", 0))}"
+      end)
+
+    "== step #{target}/s done: #{stored}; vl anon #{trunc(Map.get(v, "anon_kb", 0) / 1024)} MiB"
+  end
+
+  defp vlogs_summary(bench_lines, vl_lines, steps, restarts_before) do
+    bench = Enum.map(bench_lines, &parse_sample/1)
+    vl = Enum.map(vl_lines, &parse_sample/1)
+
+    groups =
+      bench
+      |> Enum.filter(&Map.has_key?(&1, "target_rate"))
+      |> Enum.chunk_by(&trunc(&1["target_rate"]))
+
+    {rows, _} =
+      Enum.map_reduce(groups, nil, fn group, prev ->
+        window = if prev, do: [prev | group], else: group
+        first = hd(window)
+        last = List.last(group)
+        target = trunc(last["target_rate"])
+        dt = last["t"] - first["t"]
+        step = Enum.find(steps, &(&1["target"] == target))
+
+        row =
+          if dt > 0 do
+            %{
+              "target" => target,
+              "seconds" => Float.round(dt, 1),
+              "victorialogs" =>
+                Map.merge(
+                  rates(window, "victorialogs"),
+                  vl_step(vl, first["t"], last["t"], window)
+                ),
+              "smolquery" => Map.merge(rates(window, "smolquery"), sq_step(step, restarts_before))
+            }
+          end
+
+        {row, last}
+      end)
+
+    rows = Enum.reject(rows, &is_nil/1)
+
+    %{
+      "steps" => rows,
+      "ceiling" => Map.new(@vlogs_systems, &{&1, ceiling(rows, &1)})
+    }
+  end
+
+  defp delta(first, last, k), do: Map.get(last, k, 0) - Map.get(first, k, 0)
+
+  defp rates(window, s) do
+    with_key = Enum.filter(window, &Map.has_key?(&1, "stored_rows:#{s}"))
+    first = List.first(with_key) || hd(window)
+    last = List.last(with_key) || List.last(window)
+    dt = max(last["t"] - first["t"], 1.0)
+
+    %{
+      "stored_per_s" => round(delta(first, last, "stored_rows:#{s}") / dt),
+      "sent_per_s" => round(delta(first, last, "lines_sent_total:#{s}") / dt),
+      "dropped_per_s" => round(delta(first, last, "lines_dropped_total:#{s}") / dt),
+      "send_errors" => trunc(delta(first, last, "send_line_errors_total:#{s}")),
+      "send_retries" => trunc(delta(first, last, "send_retries_total:#{s}")),
+      "stored_rows_end" => trunc(Map.get(last, "stored_rows:#{s}", 0))
+    }
+  end
+
+  defp vl_step(vl, t0, t1, bench_window) do
+    window = Enum.filter(vl, &(&1["t"] >= t0 - 8 and &1["t"] <= t1 + 8))
+
+    case window do
+      [a, _ | _] ->
+        b = List.last(window)
+        dt = b["t"] - a["t"]
+        tck = a["tck"]
+        with_key = Enum.filter(bench_window, &Map.has_key?(&1, "stored_rows:victorialogs"))
+
+        stored =
+          if with_key == [],
+            do: 0,
+            else: delta(hd(with_key), List.last(with_key), "stored_rows:victorialogs")
+
+        written = delta(a, b, "wsec") * 512
+        pids = window |> Enum.map(& &1["pid"]) |> Enum.uniq()
+
+        %{
+          "process_cores" => Float.round(delta(a, b, "ptick") / tck / dt, 2),
+          "node_cores" => Float.round(delta(a, b, "nbusy") / tck / dt, 2),
+          "anon_peak_gib" =>
+            Float.round(Enum.max(Enum.map(window, & &1["anon_kb"])) / 1_048_576, 2),
+          "disk_write_mib_s" => Float.round(written / dt / 1_048_576, 1),
+          "disk_bytes_per_line" => if(stored > 0, do: round(written / stored), else: nil),
+          "data_bytes" => trunc(b["du"]),
+          "restarted" => length(pids) > 1 or Enum.any?(window, &(&1["ptick"] < 0))
+        }
+
+      _ ->
+        %{}
+    end
+  end
+
+  defp sq_step(nil, _restarts_before), do: %{}
+
+  defp sq_step(step, restarts_before) do
+    pods = step["pods"]["pods"] || []
+
+    cores =
+      pods
+      |> Enum.group_by(&pod_role(&1["name"]))
+      |> Map.new(fn {role, ps} ->
+        {role, Float.round(Enum.sum(Enum.map(ps, &(&1["cpu_avg_pct"] || 0))) / 100, 2)}
+      end)
+
+    anon =
+      step["anon_peak_bytes"]
+      |> Enum.group_by(fn {pod, _} -> pod_role(pod) end, fn {_, n} -> n end)
+      |> Map.new(fn {role, ns} -> {role, Float.round(Enum.sum(ns) / 1_073_741_824, 2)} end)
+
+    restarts =
+      step["restarts"]
+      |> Enum.map(fn {pod, n} -> n - Map.get(restarts_before, pod, 0) end)
+      |> Enum.sum()
+
+    %{
+      "cores" => cores,
+      "cores_total" => Float.round(Enum.sum(Map.values(cores)), 2),
+      "anon_peak_gib" => anon,
+      "anon_peak_gib_total" => Float.round(Enum.sum(Map.values(anon)), 2),
+      "restarts_since_start" => restarts,
+      "restarted" => restarts > 0
+    }
+  end
+
+  defp pod_role(name) do
+    case Regex.run(~r/^smolquery-([a-z]+)-\d+$/, name) do
+      [_, role] -> role
+      _ -> name
+    end
+  end
+
+  defp ceiling(rows, s) do
+    rows
+    |> Enum.take_while(&(not Map.get(&1[s], "restarted", false)))
+    |> Enum.map(& &1[s]["stored_per_s"])
+    |> Enum.max(fn -> 0 end)
+  end
+
+  defp vlogs_table(summary) do
+    header =
+      "| target | VL stored/s | VL cores | VL anon GiB | VL disk B/line | " <>
+        "SQ stored/s | SQ cores | SQ anon GiB | SQ dropped/s | SQ restarts |\n" <>
+        "|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"
+
+    rows =
+      Enum.map(summary["steps"], fn r ->
+        v = r["victorialogs"]
+        q = r["smolquery"]
+
+        "| #{r["target"]} | #{v["stored_per_s"]} | #{v["process_cores"]} | #{v["anon_peak_gib"]} | " <>
+          "#{v["disk_bytes_per_line"]} | #{q["stored_per_s"]} | #{q["cores_total"]} | " <>
+          "#{q["anon_peak_gib_total"]} | #{q["dropped_per_s"]} | #{q["restarts_since_start"]} |"
+      end)
+
+    ceilings =
+      Enum.map_join(summary["ceiling"], ", ", fn {s, n} -> "#{s} #{n} lines/s" end)
+
+    Enum.join([header | rows], "\n") <> "\n\nceiling: " <> ceilings
   end
 
   # ── down ───────────────────────────────────────────────────────────────────

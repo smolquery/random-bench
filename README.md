@@ -19,6 +19,9 @@ The benches:
   a Postgres arm for the read cliff.
 - **TSBS** through the VictoriaMetrics edge.
 - **ClickBench** on the sandbox query tier.
+- **VictoriaLogs' structured-log ingest ramp**
+  ([VictoriaMetrics/logs-benchmark](https://github.com/VictoriaMetrics/logs-benchmark)):
+  one generator feeds VictoriaLogs and smolquery at once.
 
 Start with the bench you need below. The headline numbers are under
 [Reference numbers](#reference-numbers).
@@ -113,6 +116,7 @@ mise run bench-onebrc-ingest         # BENCHES=onebrc, ingest only, one upload p
 mise run bench-attrs                 # BENCHES=ingest,attrs; SHAPE, TABLE and VUS_LIST from the shell
 mise run bench-tail                  # BENCHES=tail; the last 100 events per project while ingest runs
 mise run bench-clickbench            # BENCHES=clickbench; 100 files of hits (99,997,497 rows) into hits_v2
+mise run bench-vlogs                 # BENCHES=vlogs, TABLE=vlogs_v1; the logs-benchmark ramp, VictoriaLogs and smolquery at once
 mise run bench-all                   # BENCHES=ingest,pruning,compaction
 BENCHES=ingest,pruning mise run bench-sweep
 ```
@@ -132,10 +136,11 @@ itself. To pick a table or a worker list, bypass the task:
 | `compaction` | compaction outcomes and pod restarts over a long window | `<label>.compact.json` |
 | `onebrc` | the one billion row challenge, in spirit: generate a `station;temperature` CSV on the box, upload it as NDJSON inserts, then time the 1BRC aggregate ten times | `<label>.onebrc.json`, `<label>.upload.json` |
 | `clickbench` | [ClickBench](https://github.com/ClickHouse/ClickBench): stream `CLICKBENCH_FILES` of the 100 `hits` Parquet files through parallel DuckDB-to-NDJSON upload pipelines, then run the 43 queries three times each from the box | `loadgen-clickbench-<table>.clickbench.json` |
+| `vlogs` | VictoriaMetrics' structured-log ingest ramp: the upstream writer sends the same lines to VictoriaLogs and smolquery, a querier counts stored rows every 15 s, and each step records stored rate, drops, CPU, anonymous memory and disk writes | `loadgen-vlogs-<stamp><suffix>.vlogs.json` |
 
 The types always run in the order ingest, attrs, tail, pruning,
-compaction, onebrc, tsbs, clickbench, whatever order you type them in. Pruning reads the rows ingest writes, and
-compaction needs those rows sealed. `onebrc` and `clickbench` stand alone:
+compaction, onebrc, tsbs, clickbench, vlogs, whatever order you type them in. Pruning reads the rows ingest writes, and
+compaction needs those rows sealed. `onebrc`, `clickbench` and `vlogs` stand alone:
 each has its own table, its own data and its own upload.
 
 Every sweep also samples each pod's metrics into a SQLite database — see
@@ -698,6 +703,62 @@ pod empties `/cache`, but nothing drops the node's page cache.
 The instance is not Terraform-managed. It is found by tag
 `Name=smolquery-bench-loadgen`, and `mise run bench-down` terminates it.
 
+### VictoriaLogs structured-log ingest
+
+`mise run bench-vlogs` reproduces benchmark 1 of
+[VictoriaMetrics/logs-benchmark](https://github.com/VictoriaMetrics/logs-benchmark)
+with two systems: VictoriaLogs and smolquery. The write-up is
+`results/2026-11-05-vlogs-structured-ingest.md`.
+
+**The writer is upstream's own.** `tools/vlogs/build.sh` clones the repo at
+a pinned commit (`d6c59e9`), copies in one adapter
+(`tools/vlogs/smolquery.go`), adds the two `case "smolquery"` lines, and
+builds `cmd/bench` with `-tags vlogs`. The tag keeps the adapter out of this
+repo's own Go build. Every line goes to both systems, as upstream sends
+every line to all six of its systems.
+
+1. Run `mise run bench-up`. A 16-vCPU box is enough:
+   `LOADGEN_INSTANCE_TYPE=c7i.4xlarge`.
+2. Run `mise run vlogs-up`. It launches `smolquery-bench-vlogs`, an
+   m6a.2xlarge (8 vCPU AMD Milan, 32 GiB, against upstream's
+   n2d-standard-8) with a 500 GiB gp3 data disk at 280 MiB/s and 3,000 IOPS,
+   and installs VictoriaLogs `VLOGS_VERSION` (v1.53.0) at its defaults.
+3. Run `BASE_URL=… mise run bench-vlogs`. Each run wipes VictoriaLogs'
+   data, starts the writer, the querier and a sampler on the box under
+   systemd, and samples pod CPU and anonymous memory from this machine once
+   per step.
+4. Run `mise run vlogs-down` and `mise run bench-down` when you finish.
+
+`elixir scripts/loadgen.exs vlogs-report <file.vlogs.json>` rebuilds the step
+table from a saved run. The raw samples are written before the summary, so
+a summary bug cannot lose a run.
+
+| knob | default | upstream |
+|---|---|---|
+| `VLOGS_RATE` | 10000 | 10000 |
+| `VLOGS_STEP` | 10000 | 10000 |
+| `VLOGS_MAX` | 150000 | 180000 |
+| `VLOGS_INTERVAL_S` | 300 | 600 |
+| `VLOGS_BATCH_LINES` | 2000 | 2000 |
+| `VLOGS_WORKERS` | 32 | 32 |
+| `VLOGS_SETTLE_S` | 120 | — |
+
+The writer always runs `-hosts 125 -apps 40 -seed 1 -buffer 400000
+-dropOnFull`, as upstream does. **Read a step's stored rate, not its sent
+rate.** A system that cannot keep up fills its queue, and the writer drops
+its share of the lines, for that system only.
+
+Three traps:
+
+- **The querier counts through the query pods.** The api pods answer
+  `POST /v1/queries` with a 503. `VLOGS_QUERY_SERVICE` (default
+  `smolquery-query`) picks the service.
+- **`SMOLQUERY_API_KEY` reaches the box through SSM Parameter Store**, like
+  every other bench. `bench-start.sh` puts it in the systemd units' env.
+- **The cluster's own Vector shippers also insert**, about 20 small
+  requests/s. The api insert histogram mixes them in. For the bench's own
+  ack latency, divide the in-flight count by the request rate.
+
 ## The Postgres arm
 
 One question: **at how many rows does a read on a small Postgres instance stop
@@ -906,6 +967,7 @@ scripts/pg-onebrc.exs the Postgres read-cliff bench: setup, run, report
 scripts/tsbs.exs      TSBS cpu-only against the VictoriaMetrics edge, per smolquery build
 scripts/clickbench/   the 43 ClickBench queries, the scatter probe query, the per-file load pipeline and its status summer
 tools/cbquery/        runs the ClickBench queries from the box against one query pod
+tools/vlogs/          the smolquery adapter for VictoriaMetrics' logs-benchmark, its build script, and the box-side start, stop and sampler scripts
 scripts/clickbench-report.exs  a ClickBench run against the published S3 entries, as markdown
 scripts/report_html.exs  the HTML run report generator
 scripts/report/       its CSS and JS, inlined into every report
@@ -1000,6 +1062,7 @@ Adding the column changed the schema, and smolquery answers 409 on a
 | `clickstack_map_v2`, `clickstack_variant_v2` | same | same | the same schemas, fed the stamped body (`log_attributes['ingest.stamp']` varies per request) — the tables to compare; `_v1` hold the unstamped, dictionary-compressed rows |
 | `hits_v1` | `ORDER BY (CounterID, EventDate, UserID, EventTime, WatchID)` | clustering `[CounterID, EventDate, UserID, EventTime]` | ClickBench's `hits`: 105 columns, integers as `INT64`, text as `STRING`, ~2.3 KB/row as NDJSON; `BENCHES=clickbench`. Any `hits*` table takes this schema and clustering. **Holds the first 10M rows (files 0 to 9) since 2026-10-03** |
 | `hits_v2` | same | same | the full ClickBench `hits`, 99,997,497 rows, loaded 2026-10-03 |
+| `vlogs_v1` | `ORDER BY (app, timestamp)` | clustering `[app, timestamp]` | VictoriaMetrics' logs-benchmark lines: 62 nullable columns (5 core, 3 host, 54 from the field pool), 30-40 set per line, ~930 bytes of JSON; `BENCHES=vlogs`. Holds every 2026-11-05 run, smoke included: 1,708,562,000 rows |
 | `clickstack_map_p64` | `PARTITION BY (project, toDate(timestamp))` | same, `partitions: 64` | the 2026-08-27 pathological table: 64 write partitions and `DAYS=30` timestamps — the nearest smolquery analog of a per-project, per-day partition key |
 
 `otel_logs_v3` is what `TABLE` defaults to. It exists to answer one question:
@@ -1016,6 +1079,15 @@ like-for-like. Say which mechanism produced each number.
 collects NULLs in a partition of their own.
 
 ## Reference numbers
+
+VictoriaMetrics' structured-log ingest ramp, 2026-11-05 (`main@4a72dc3`,
+upstream writer, 2,000 lines per request, 32 in flight, 5-minute steps):
+**VictoriaLogs v1.53.0 on one 8-vCPU node stores 141,468 lines/s. smolquery
+as deployed stores 53,874, held by its 1-second group-commit window. Tuned
+to `SMOLQUERY_FLUSH_INTERVAL_MS=100` with api + buffer + storage limited to
+8 cores, it stores 168,760**, with zero errors, zero restarts and sealing
+at parity. The short window costs query-time hot files; the sandbox runs
+1 s on purpose. See `results/2026-11-05-vlogs-structured-ingest.md`.
 
 ClickBench on the full 100M rows, 2026-10-04 (`main@947dfa0`, 8GB job
 engine, 32 threads): **on one c6a.4xlarge query node (`"distributed":

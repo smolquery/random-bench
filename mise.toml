@@ -173,3 +173,16 @@ run = "elixir scripts/tsbs.exs run"
 [tasks.tsbs-report]
 description = "Markdown tables for LABELS at SCALE from results/raw-tsbs"
 run = "elixir scripts/tsbs.exs report"
+
+[tasks.vlogs-up]
+description = "Launch the VictoriaLogs instance (m6a.2xlarge, 500 GiB gp3 at 280 MiB/s) and install VictoriaLogs"
+run = "elixir scripts/loadgen.exs vlogs-up"
+
+[tasks.vlogs-down]
+description = "Terminate the VictoriaLogs instance and its disk"
+run = "elixir scripts/loadgen.exs vlogs-down"
+
+[tasks.bench-vlogs]
+description = "VictoriaMetrics' structured-log ingest ramp against VictoriaLogs and smolquery at once (VLOGS_INTERVAL_S=..., VLOGS_MAX=...)"
+env = { BENCHES = "vlogs", TABLE = "vlogs_v1" }
+run = "elixir scripts/loadgen.exs sweep"
